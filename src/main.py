@@ -141,6 +141,8 @@ def main():
         raise
 
 if __name__ == "__main__":
-    # Ensure multiprocessing works correctly on all platforms
-    mp.set_start_method('spawn', force=True)
+    # Use fork method on Unix systems to preserve environment changes
+    import sys
+    if sys.platform != 'win32':
+        mp.set_start_method('fork', force=True)
     main() 

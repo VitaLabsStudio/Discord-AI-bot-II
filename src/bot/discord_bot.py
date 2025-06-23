@@ -126,14 +126,15 @@ class VitaDiscordBot(commands.Bot):
         except Exception as e:
             logger.error(f"Failed to process message {message.id}: {e}")
     
-    async def _send_to_backend(self, endpoint: str, data: Dict[str, Any], max_retries: int = 2) -> Optional[Dict]:
+    async def _send_to_backend(self, endpoint: str, data: Dict[str, Any] = None, max_retries: int = 2, method: str = "POST") -> Optional[Dict]:
         """
         Send data to backend API with retry logic.
         
         Args:
             endpoint: API endpoint
-            data: Data to send
+            data: Data to send (for POST requests)
             max_retries: Maximum number of retry attempts
+            method: HTTP method ("POST" or "GET")
             
         Returns:
             Response data or None if failed
@@ -146,17 +147,29 @@ class VitaDiscordBot(commands.Bot):
         
         for attempt in range(max_retries + 1):
             try:
-                async with self.session.post(url, json=data) as response:
-                    if response.status in [200, 202]:
-                        return await response.json()
-                    elif response.status == 500 and attempt < max_retries:
-                        # Retry on server errors
-                        logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
-                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
-                        continue
-                    else:
-                        logger.error(f"Backend request failed: {response.status} - {await response.text()}")
-                        return None
+                if method.upper() == "GET":
+                    async with self.session.get(url) as response:
+                        if response.status == 200:
+                            return await response.json()
+                        elif response.status == 500 and attempt < max_retries:
+                            logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        else:
+                            logger.error(f"Backend GET request failed: {response.status} - {await response.text()}")
+                            return None
+                else:  # POST
+                    async with self.session.post(url, json=data) as response:
+                        if response.status in [200, 202]:
+                            return await response.json()
+                        elif response.status == 500 and attempt < max_retries:
+                            # Retry on server errors
+                            logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                            await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                            continue
+                        else:
+                            logger.error(f"Backend request failed: {response.status} - {await response.text()}")
+                            return None
                         
             except asyncio.TimeoutError:
                 if attempt < max_retries:
@@ -259,7 +272,7 @@ async def ask_command(interaction: discord.Interaction, question: str):
     limit="Number of messages per channel to ingest (default: 100, max: 1000). Threads will be fully processed."
 )
 async def ingest_history_command(interaction: discord.Interaction, limit: int = 100):
-    """Ingest message history from ALL channels and threads in the server into the knowledge base."""
+    """Ingest message history from ALL channels and threads with real-time progress tracking."""
     try:
         # Check permissions - require Administrator for server-wide ingestion
         if not interaction.user.guild_permissions.administrator:
@@ -286,42 +299,48 @@ async def ingest_history_command(interaction: discord.Interaction, limit: int = 
             await interaction.followup.send("❌ No accessible text channels found.")
             return
         
-        # Initial status message
+        # Initial status message with enhanced design
         embed = discord.Embed(
-            title="📚 Server-Wide History Ingestion Started",
-            description=f"Processing {len(text_channels)} text channels and their threads...",
-            color=0x00ff00
+            title="🚀 VITA Knowledge Ingestion Started",
+            description="Processing server-wide message history with real-time tracking...",
+            color=0x00aaff
         )
-        embed.add_field(name="Channels to Process", value=str(len(text_channels)), inline=True)
-        embed.add_field(name="Messages per Channel", value=str(limit), inline=True)
-        embed.add_field(name="Thread Processing", value="All messages (unlimited)", inline=True)
-        embed.add_field(name="Status", value="🔄 Starting...", inline=False)
+        embed.add_field(name="📊 Overall Progress", value="Initializing...", inline=False)
+        embed.add_field(name="📁 Current Channel", value="Starting...", inline=True)
+        embed.add_field(name="📈 Live Status", value="Preparing...", inline=True)
+        embed.add_field(name="🔄 Recent Activity", value="Getting ready...", inline=False)
+        embed.set_footer(text="This message updates in real-time • Use enhanced logging system")
         
         status_message = await interaction.followup.send(embed=embed)
         
-        # Process each channel
-        total_messages = 0
+        # Tracking variables
+        total_messages_submitted = 0
+        total_successful = 0
+        total_failed = 0
         processed_channels = 0
         skipped_channels = 0
-        total_threads = 0
-        total_thread_messages = 0
+        current_batch_id = None
         
-        for channel in text_channels:
+        bot = interaction.client
+        
+        for channel_idx, channel in enumerate(text_channels):
             try:
-                # Check if bot has permission to read this channel
+                # Check permissions
                 if not channel.permissions_for(guild.me).read_message_history:
                     skipped_channels += 1
                     continue
                 
+                # Update embed for current channel
+                progress_text = f"Channel {channel_idx + 1}/{len(text_channels)} • Processed: {processed_channels}"
+                embed.set_field_at(0, name="📊 Overall Progress", value=progress_text, inline=False)
+                embed.set_field_at(1, name="📁 Current Channel", value=f"#{channel.name}", inline=True)
+                embed.set_field_at(2, name="📈 Live Status", value="🔍 Collecting messages...", inline=True)
+                await status_message.edit(embed=embed)
+                
                 # Collect messages from this channel
                 channel_messages = []
                 async for message in channel.history(limit=limit):
-                    # Skip bot messages
-                    if message.author.bot:
-                        continue
-                    
-                    # Skip if no content and no attachments
-                    if not message.content and not message.attachments:
+                    if message.author.bot or (not message.content and not message.attachments):
                         continue
                     
                     # Extract user roles
@@ -334,153 +353,152 @@ async def ingest_history_command(interaction: discord.Interaction, limit: int = 
                     if message.attachments:
                         attachment_urls = [attachment.url for attachment in message.attachments]
                     
-                    # Create message data - FIXED: Proper channel/thread ID handling
+                    # Create message data
                     message_data = {
                         "message_id": str(message.id),
-                        "channel_id": str(channel.id),  # This is the parent channel
+                        "channel_id": str(channel.id),
                         "user_id": str(message.author.id),
                         "content": message.content or "",
                         "timestamp": message.created_at.isoformat(),
                         "attachments": attachment_urls if attachment_urls else None,
-                        "thread_id": None,  # Regular channel messages have no thread_id
+                        "thread_id": None,
                         "roles": user_roles if user_roles else None
                     }
                     
                     channel_messages.append(message_data)
-                    
-                # Send batch request for this channel if we have messages
+                
+                # Process channel messages with tracking
                 if channel_messages:
+                    # Update status
+                    embed.set_field_at(2, name="📈 Live Status", value=f"🚀 Processing {len(channel_messages)} messages...", inline=True)
+                    await status_message.edit(embed=embed)
+                    
+                    # Send batch to backend
                     batch_data = {"messages": channel_messages}
-                    bot = interaction.client
                     response = await bot._send_to_backend("/batch_ingest", batch_data)
                     
-                    if response:
-                        total_messages += len(channel_messages)
-                        logger.info(f"Successfully ingested {len(channel_messages)} messages from #{channel.name}")
+                    if response and response.get("batch_id"):
+                        current_batch_id = response["batch_id"]
+                        total_messages_submitted += len(channel_messages)
+                        
+                        # Monitor progress in real-time
+                        await monitor_batch_progress(
+                            bot, current_batch_id, status_message, embed, 
+                            channel.name, channel_idx + 1, len(text_channels)
+                        )
+                        
+                        # Get final counts from the last progress update
+                        final_progress = await bot._send_to_backend(f"/progress/{current_batch_id}", {}, method="GET")
+                        if final_progress:
+                            progress_data = final_progress.get("progress", {})
+                            total_successful += progress_data.get("success_count", 0)
+                            total_failed += progress_data.get("error_count", 0)
                     else:
-                        logger.error(f"Failed to ingest messages from #{channel.name}")
+                        logger.error(f"Failed to start batch processing for #{channel.name}")
+                        total_failed += len(channel_messages)
                 
-                # Process threads in this channel
+                # Process threads in this channel with similar tracking
                 logger.info(f"Processing threads in channel: #{channel.name}")
+                embed.set_field_at(2, name="📈 Live Status", value="🧵 Processing threads...", inline=True)
+                await status_message.edit(embed=embed)
                 
                 try:
-                    # Get all threads (both active and archived)
-                    all_threads = []
-                    
-                    # Add active threads
-                    all_threads.extend(channel.threads)
-                    
-                    # Add archived public threads
+                    # Get all threads
+                    all_threads = list(channel.threads)
                     async for thread in channel.archived_threads(limit=None):
                         all_threads.append(thread)
                     
                     # Process each thread
                     for thread in all_threads:
                         try:
-                            # Check if bot has permission to read this thread
                             if not thread.permissions_for(guild.me).read_message_history:
                                 continue
                             
-                            total_threads += 1
-                            
+                            # Collect thread messages
                             thread_messages = []
                             async for message in thread.history(limit=None):
-                                # Skip bot messages
-                                if message.author.bot:
-                                    continue
-                                    
-                                # Skip if no content and no attachments
-                                if not message.content and not message.attachments:
+                                if message.author.bot or (not message.content and not message.attachments):
                                     continue
                                 
-                                # Extract user roles
                                 user_roles = []
                                 if hasattr(message.author, 'roles'):
                                     user_roles = [role.name for role in message.author.roles]
                                 
-                                # Prepare attachment URLs
                                 attachment_urls = []
                                 if message.attachments:
                                     attachment_urls = [attachment.url for attachment in message.attachments]
                                 
-                                # Create message data - FIXED: Proper thread message handling
                                 message_data = {
                                     "message_id": str(message.id),
-                                    "channel_id": str(channel.id),  # Parent channel ID
+                                    "channel_id": str(channel.id),
                                     "user_id": str(message.author.id),
                                     "content": message.content or "",
                                     "timestamp": message.created_at.isoformat(),
                                     "attachments": attachment_urls if attachment_urls else None,
-                                    "thread_id": str(thread.id),  # Properly set thread_id for thread messages
+                                    "thread_id": str(thread.id),
                                     "roles": user_roles if user_roles else None
                                 }
                                 
                                 thread_messages.append(message_data)
                             
-                            # Send batch request for this thread if we have messages
+                            # Process thread messages
                             if thread_messages:
+                                embed.set_field_at(2, name="📈 Live Status", value=f"🧵 Thread: {thread.name[:20]}...", inline=True)
+                                await status_message.edit(embed=embed)
+                                
                                 batch_data = {"messages": thread_messages}
                                 response = await bot._send_to_backend("/batch_ingest", batch_data)
                                 
-                                if response:
-                                    total_messages += len(thread_messages)
-                                    total_thread_messages += len(thread_messages)
-                                    logger.info(f"Successfully ingested {len(thread_messages)} messages from thread '{thread.name}' in #{channel.name}")
-                                else:
-                                    logger.error(f"Failed to ingest messages from thread '{thread.name}' in #{channel.name}")
-                            
-                            # Small delay between threads to prevent rate limiting
-                            await asyncio.sleep(0.2)
+                                if response and response.get("batch_id"):
+                                    current_batch_id = response["batch_id"]
+                                    total_messages_submitted += len(thread_messages)
+                                    
+                                    await monitor_batch_progress(
+                                        bot, current_batch_id, status_message, embed,
+                                        f"Thread: {thread.name}", channel_idx + 1, len(text_channels)
+                                    )
+                                    
+                                    # Update counts
+                                    final_progress = await bot._send_to_backend(f"/progress/{current_batch_id}", {}, method="GET")
+                                    if final_progress:
+                                        progress_data = final_progress.get("progress", {})
+                                        total_successful += progress_data.get("success_count", 0)
+                                        total_failed += progress_data.get("error_count", 0)
+                                
+                                await asyncio.sleep(0.2)  # Small delay between threads
                             
                         except Exception as e:
-                            logger.error(f"Error processing thread '{thread.name}' in #{channel.name}: {e}")
+                            logger.error(f"Error processing thread '{thread.name}': {e}")
                             continue
-                    
-                    if all_threads:
-                        logger.info(f"Completed processing {len(all_threads)} threads in #{channel.name}")
                     
                 except Exception as e:
                     logger.error(f"Error fetching threads for #{channel.name}: {e}")
                 
                 processed_channels += 1
-                
-                # Update progress every 5 channels
-                if processed_channels % 5 == 0:
-                    progress_embed = discord.Embed(
-                        title="📚 Server-Wide History Ingestion In Progress",
-                        description=f"Processing channels and threads... ({processed_channels}/{len(text_channels)})",
-                        color=0xffaa00
-                    )
-                    progress_embed.add_field(name="Processed Channels", value=f"{processed_channels}/{len(text_channels)}", inline=True)
-                    progress_embed.add_field(name="Total Messages", value=str(total_messages), inline=True)
-                    progress_embed.add_field(name="Threads Processed", value=str(total_threads), inline=True)
-                    progress_embed.add_field(name="Current Channel", value=f"#{channel.name}", inline=True)
-                    
-                    try:
-                        await status_message.edit(embed=progress_embed)
-                    except:
-                        pass  # Ignore edit failures
-                
-                # Small delay to prevent rate limiting
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.5)  # Small delay between channels
                 
             except Exception as e:
                 logger.error(f"Error processing channel #{channel.name}: {e}")
                 skipped_channels += 1
                 continue
         
-        # Final status update
+        # Final status update with enhanced summary
+        success_rate = (total_successful/total_messages_submitted*100) if total_messages_submitted > 0 else 0
         final_embed = discord.Embed(
-            title="✅ Server-Wide History Ingestion Complete",
-            description="Successfully processed all accessible channels and threads!",
+            title="✅ VITA Knowledge Ingestion Complete!",
+            description=f"Successfully processed **{processed_channels}** channels with **{success_rate:.1f}% success rate**",
             color=0x00ff00
         )
-        final_embed.add_field(name="📊 Total Messages Ingested", value=str(total_messages), inline=True)
-        final_embed.add_field(name="📁 Channels Processed", value=str(processed_channels), inline=True)
-        final_embed.add_field(name="🧵 Threads Processed", value=str(total_threads), inline=True)
-        final_embed.add_field(name="💬 Thread Messages", value=str(total_thread_messages), inline=True)
-        final_embed.add_field(name="⚠️ Channels Skipped", value=str(skipped_channels), inline=True)
-        final_embed.add_field(name="🏆 Status", value="Complete", inline=False)
+        
+        # Primary stats
+        final_embed.add_field(name="📊 Messages Submitted", value=f"**{total_messages_submitted:,}**", inline=True)
+        final_embed.add_field(name="✅ Successfully Stored", value=f"**{total_successful:,}**", inline=True)
+        final_embed.add_field(name="❌ Failed/Errors", value=f"**{total_failed:,}**", inline=True)
+        
+        # Processing stats
+        final_embed.add_field(name="📁 Channels", value=f"✅ {processed_channels} | ⚠️ {skipped_channels}", inline=True)
+        final_embed.add_field(name="📈 Success Rate", value=f"**{success_rate:.1f}%**", inline=True)
+        final_embed.add_field(name="🚀 Enhanced Tracking", value="**Enabled**", inline=True)
         
         if skipped_channels > 0:
             final_embed.add_field(
@@ -489,15 +507,109 @@ async def ingest_history_command(interaction: discord.Interaction, limit: int = 
                 inline=False
             )
         
+        final_embed.set_footer(text="Knowledge base successfully updated with enhanced tracking")
+        
         try:
             await status_message.edit(embed=final_embed)
         except:
-            # If edit fails, send new message
             await interaction.followup.send(embed=final_embed)
         
     except Exception as e:
         logger.error(f"Failed to process ingest_history command: {e}")
-        await interaction.followup.send("❌ An error occurred while processing the server-wide history ingestion. Please try again later.")
+        await interaction.followup.send("❌ An error occurred during the ingestion process. Please check the logs for details.")
+
+async def monitor_batch_progress(bot, batch_id: str, status_message, embed, 
+                               current_location: str, channel_num: int, total_channels: int):
+    """
+    Monitor batch progress and update Discord message with real-time logs.
+    """
+    max_updates = 30  # Maximum number of progress updates
+    update_count = 0
+    
+    while update_count < max_updates:
+        try:
+            # Get progress from backend
+            progress_response = await bot._send_to_backend(f"/progress/{batch_id}", {}, method="GET")
+            
+            if not progress_response:
+                await asyncio.sleep(2)
+                update_count += 1
+                continue
+            
+            progress = progress_response.get("progress", {})
+            status = progress.get("status", "UNKNOWN")
+            
+            # Update progress display
+            processed = progress.get("processed_count", 0)
+            total = progress.get("total_messages", 0)
+            success = progress.get("success_count", 0)
+            errors = progress.get("error_count", 0)
+            
+            # Update embed fields with clearer progress display
+            progress_bar = create_progress_bar(processed, total)
+            channel_progress = f"Channel {channel_num}/{total_channels}"
+            batch_progress = f"Batch: {progress_bar} ({processed}/{total})"
+            overall_progress = f"{channel_progress}\n{batch_progress}"
+            embed.set_field_at(0, name="📊 Overall Progress", value=overall_progress, inline=False)
+            embed.set_field_at(1, name="📁 Current Location", value=current_location, inline=True)
+            
+            status_emoji = "🔄" if status == "PROCESSING" else "✅" if status == "COMPLETED" else "❌"
+            status_text = f"{status_emoji} {status}\n✅ {success} | ❌ {errors}"
+            embed.set_field_at(2, name="📈 Live Status", value=status_text, inline=True)
+            
+            # Show recent activity logs with better formatting
+            recent_logs = progress.get("recent_logs", [])
+            if recent_logs:
+                latest_log = recent_logs[-1]
+                log_status = latest_log.get("status", "UNKNOWN")
+                log_emoji = "✅" if log_status == "SUCCESS" else "❌" if log_status == "ERROR" else "⏭️"
+                
+                # Get the most relevant details from the log
+                details = latest_log.get("details", [])
+                message_preview = latest_log.get('message_id', 'Unknown')[-6:]
+                recent_activity = f"{log_emoji} Msg {message_preview}: {log_status}"
+                
+                if details:
+                    # Show most relevant details (last 2, but prioritize important ones)
+                    relevant_details = []
+                    for detail in details:
+                        if any(keyword in detail.lower() for keyword in ['stored', 'generated', 'processed', 'chunks', 'error']):
+                            relevant_details.append(detail)
+                    
+                    # Use relevant details if found, otherwise use last 2
+                    display_details = relevant_details[-2:] if relevant_details else details[-2:]
+                    
+                    for detail in display_details:
+                        if len(detail) > 45:
+                            detail = detail[:42] + "..."
+                        recent_activity += f"\n• {detail}"
+                
+                embed.set_field_at(3, name="🔄 Recent Activity", value=f"```yaml\n{recent_activity[:180]}```", inline=False)
+            
+            # Update the message
+            await status_message.edit(embed=embed)
+            
+            # Check if completed
+            if status in ["COMPLETED", "FAILED"]:
+                break
+            
+            await asyncio.sleep(2)  # Update every 2 seconds
+            update_count += 1
+            
+        except Exception as e:
+            logger.error(f"Error monitoring batch progress: {e}")
+            await asyncio.sleep(2)
+            update_count += 1
+
+def create_progress_bar(current: int, total: int, length: int = 10) -> str:
+    """Create a visual progress bar."""
+    if total == 0:
+        return "▱" * length
+    
+    filled = int((current / total) * length)
+    bar = "▰" * filled + "▱" * (length - filled)
+    percentage = (current / total) * 100
+    return f"{bar} {percentage:.1f}%"
 
 async def _send_batch_to_backend(bot: VitaDiscordBot, messages: List[Dict]) -> bool:
     """

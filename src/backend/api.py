@@ -3,11 +3,12 @@ from typing import List
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Header
 from fastapi.security import HTTPBearer
 from dotenv import load_dotenv
-from .schemas import IngestRequest, QueryRequest, QueryResponse, BatchIngestRequest
+from .schemas import IngestRequest, QueryRequest, QueryResponse, BatchIngestRequest, ProgressResponse
 from .ingestion import run_ingestion_task, run_batch_ingestion_task, is_processed
 from .embedding import embedding_manager
 from .permissions import permission_manager
 from .llm_client import llm_client
+from .progress_tracker import progress_tracker
 from .logger import get_logger
 
 # Load environment variables
@@ -117,14 +118,14 @@ async def batch_ingest_messages(
     _: bool = Depends(verify_api_key)
 ):
     """
-    Batch ingest multiple Discord messages.
+    Batch ingest multiple Discord messages with progress tracking.
     
     Args:
         request: BatchIngestRequest with list of messages
         background_tasks: FastAPI background tasks
         
     Returns:
-        202 Accepted response
+        202 Accepted response with batch_id for tracking
     """
     try:
         if not request.messages:
@@ -165,17 +166,22 @@ async def batch_ingest_messages(
         if not ingest_requests:
             raise HTTPException(status_code=400, detail="No valid messages to process")
         
-        # Add batch ingestion task to background queue
-        background_tasks.add_task(run_batch_ingestion_task, ingest_requests)
+        # Create batch tracker
+        batch_id = progress_tracker.create_batch(len(ingest_requests))
         
-        logger.info(f"Queued batch ingestion task for {len(ingest_requests)} messages")
+        # Add batch ingestion task to background queue
+        background_tasks.add_task(run_batch_ingestion_task, ingest_requests, batch_id)
+        
+        logger.info(f"Queued batch ingestion task for {len(ingest_requests)} messages with batch_id: {batch_id}")
         
         return {
             "status": "accepted",
+            "batch_id": batch_id,
             "message_count": len(ingest_requests),
             "valid_messages": len(ingest_requests),
             "total_submitted": len(request.messages),
-            "message": "Batch ingestion task queued for processing"
+            "message": "Batch ingestion task queued for processing",
+            "progress_endpoint": f"/progress/{batch_id}"
         }
         
     except HTTPException:
@@ -183,6 +189,37 @@ async def batch_ingest_messages(
     except Exception as e:
         logger.error(f"Failed to queue batch ingestion task: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to queue batch ingestion task: {str(e)}")
+
+@app.get("/progress/{batch_id}", response_model=ProgressResponse)
+async def get_progress(
+    batch_id: str,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Get real-time progress for a batch ingestion operation.
+    
+    Args:
+        batch_id: Unique batch identifier
+        
+    Returns:
+        Progress information and recent logs
+    """
+    try:
+        progress = progress_tracker.get_progress(batch_id)
+        
+        if not progress:
+            raise HTTPException(status_code=404, detail=f"Batch {batch_id} not found")
+        
+        return ProgressResponse(
+            progress=progress,
+            message=f"Batch progress: {progress.processed_count}/{progress.total_messages} processed"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get progress for batch {batch_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get progress: {str(e)}")
 
 @app.post("/query", response_model=QueryResponse)
 async def query_knowledge(

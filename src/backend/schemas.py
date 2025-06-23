@@ -29,4 +29,30 @@ class QueryResponse(BaseModel):
 
 class BatchIngestRequest(BaseModel):
     """Request model for batch message ingestion."""
-    messages: List[IngestRequest] = Field(..., description="List of messages to ingest") 
+    messages: List[IngestRequest] = Field(..., description="List of messages to ingest")
+
+class IngestionLog(BaseModel):
+    """Detailed log entry for a single message ingestion."""
+    message_id: str
+    status: str  # "SUCCESS", "SKIPPED", "ERROR", "PROCESSING"
+    details: List[str] = []
+    timestamp: str
+    channel_name: Optional[str] = None
+    error_message: Optional[str] = None
+
+class BatchProgress(BaseModel):
+    """Progress tracking for batch ingestion operations."""
+    batch_id: str
+    total_messages: int
+    processed_count: int
+    success_count: int
+    error_count: int
+    skipped_count: int
+    current_channel: Optional[str] = None
+    recent_logs: List[IngestionLog] = []
+    status: str  # "PROCESSING", "COMPLETED", "FAILED"
+    
+class ProgressResponse(BaseModel):
+    """Response for progress queries."""
+    progress: BatchProgress
+    message: str 
