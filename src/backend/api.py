@@ -307,6 +307,190 @@ async def get_stats(_: bool = Depends(verify_api_key)):
         logger.error(f"Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
+# Admin endpoints for Dead Letter Queue management
+@app.get("/admin/dlq/stats")
+async def get_dlq_stats(_: bool = Depends(verify_api_key)):
+    """
+    Get dead letter queue statistics (Admin only).
+    
+    Returns:
+        DLQ statistics including failure types and counts
+    """
+    try:
+        from .dead_letter_queue import enhanced_dlq
+        
+        stats = enhanced_dlq.get_stats()
+        
+        return {
+            "stats": stats,
+            "message": "DLQ statistics retrieved successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get DLQ stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get DLQ stats: {str(e)}")
+
+@app.get("/admin/dlq/items")
+async def get_dlq_items(
+    failure_type: str = None,
+    limit: int = 10,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Get dead letter queue items (Admin only).
+    
+    Args:
+        failure_type: Optional filter by failure type
+        limit: Maximum number of items to return
+        
+    Returns:
+        List of DLQ items
+    """
+    try:
+        from .dead_letter_queue import enhanced_dlq, FailureType
+        
+        # Validate failure type if provided
+        failure_type_enum = None
+        if failure_type:
+            try:
+                failure_type_enum = FailureType(failure_type.lower())
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid failure_type. Valid types: {[ft.value for ft in FailureType]}"
+                )
+        
+        # Validate limit
+        if limit < 1 or limit > 100:
+            limit = min(max(limit, 1), 100)
+        
+        items = enhanced_dlq.get_items(failure_type=failure_type_enum, limit=limit)
+        
+        # Convert items to dictionaries for JSON response
+        items_data = [item.to_dict() for item in items]
+        
+        return {
+            "items": items_data,
+            "count": len(items_data),
+            "message": f"Retrieved {len(items_data)} DLQ items"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get DLQ items: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get DLQ items: {str(e)}")
+
+@app.post("/admin/dlq/cleanup")
+async def cleanup_dlq(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Clean up old dead letter queue items (Admin only).
+    
+    Args:
+        request: Dictionary with 'days' parameter
+        
+    Returns:
+        Number of items removed
+    """
+    try:
+        from .dead_letter_queue import enhanced_dlq
+        
+        days = request.get("days", 30)
+        
+        # Validate days parameter
+        if not isinstance(days, int) or days < 1 or days > 365:
+            raise HTTPException(
+                status_code=400,
+                detail="Days parameter must be an integer between 1 and 365"
+            )
+        
+        removed_count = enhanced_dlq.cleanup_old_items(days)
+        
+        return {
+            "removed_count": removed_count,
+            "message": f"Cleaned up {removed_count} items older than {days} days"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to cleanup DLQ: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to cleanup DLQ: {str(e)}")
+
+@app.delete("/admin/dlq/items/{item_id}")
+async def remove_dlq_item(
+    item_id: str,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Remove a specific dead letter queue item (Admin only).
+    
+    Args:
+        item_id: ID of the item to remove
+        
+    Returns:
+        Success message
+    """
+    try:
+        from .dead_letter_queue import enhanced_dlq
+        
+        success = enhanced_dlq.remove_item(item_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"DLQ item {item_id} not found")
+        
+        return {
+            "message": f"Successfully removed DLQ item {item_id}"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove DLQ item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove DLQ item: {str(e)}")
+
+@app.post("/admin/dlq/items/{item_id}/retry")
+async def retry_dlq_item(
+    item_id: str,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Mark a dead letter queue item as retried (Admin only).
+    
+    Args:
+        item_id: ID of the item to mark as retried
+        
+    Returns:
+        Success message
+    """
+    try:
+        from .dead_letter_queue import enhanced_dlq
+        
+        # Get the item first
+        item = enhanced_dlq.get_item(item_id)
+        if not item:
+            raise HTTPException(status_code=404, detail=f"DLQ item {item_id} not found")
+        
+        # Mark as retried
+        success = enhanced_dlq.mark_retry(item_id)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Failed to mark item {item_id} as retried")
+        
+        return {
+            "message": f"Successfully marked DLQ item {item_id} as retried",
+            "retry_count": item.retry_count + 1
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retry DLQ item {item_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to retry DLQ item: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     

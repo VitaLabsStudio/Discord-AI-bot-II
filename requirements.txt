@@ -7,6 +7,7 @@ aiohttp==3.9.5
 Pillow==10.3.0
 pytesseract==0.3.10
 multiprocessing-logging==0.3.1
+filelock==3.16.1
 
 # AI & Data Processing
 openai==1.90.0
@@ -23,4 +24,12 @@ python-magic==0.4.27 # For MIME type detection
 
 # Testing & Linting
 pytest==8.2.1
-pytest-asyncio==0.23.7 
+pytest-asyncio==0.23.7
+pytest-mock==3.14.0
+pytest-cov==5.0.0
+
+# Code Quality & Security
+black==24.10.0
+ruff==0.9.8
+bandit==1.8.0
+safety==3.2.11 

@@ -638,6 +638,226 @@ async def _send_batch_to_backend(bot: VitaDiscordBot, messages: List[Dict]) -> b
         logger.error(f"Error sending batch to backend: {e}")
         return False
 
+@discord.app_commands.describe()
+async def dlq_stats_command(interaction: discord.Interaction):
+    """View dead letter queue statistics (Admin only)."""
+    try:
+        # Check admin permissions
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need 'Administrator' permission to view DLQ statistics.", ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        
+        # Get DLQ stats from backend
+        bot = interaction.client
+        response = await bot._send_to_backend("/admin/dlq/stats", {}, method="GET")
+        
+        if not response:
+            await interaction.followup.send("❌ Failed to fetch DLQ statistics.")
+            return
+        
+        stats = response.get("stats", {})
+        total_items = stats.get("total_items", 0)
+        
+        if total_items == 0:
+            embed = discord.Embed(
+                title="📊 Dead Letter Queue Statistics",
+                description="✅ No failed items in the queue!",
+                color=0x00ff00
+            )
+            await interaction.followup.send(embed=embed)
+            return
+        
+        # Create detailed stats embed
+        embed = discord.Embed(
+            title="📊 Dead Letter Queue Statistics",
+            description=f"Found **{total_items}** failed items",
+            color=0xff6600
+        )
+        
+        # Failure type breakdown
+        failure_types = stats.get("failure_types", {})
+        if failure_types:
+            failure_text = ""
+            for failure_type, count in failure_types.items():
+                emoji = {
+                    "download": "⬇️", "parsing": "📄", "ocr": "👁️", 
+                    "api": "🔌", "network": "🌐", "validation": "✅", "unknown": "❓"
+                }.get(failure_type, "❓")
+                failure_text += f"{emoji} {failure_type.title()}: **{count}**\n"
+            embed.add_field(name="🔍 Failure Types", value=failure_text, inline=True)
+        
+        # Retry statistics
+        retry_stats = stats.get("retry_stats", {})
+        if retry_stats:
+            retry_text = f"🆕 New: **{retry_stats.get('no_retries', 0)}**\n"
+            retry_text += f"🔄 Retried: **{retry_stats.get('has_retries', 0)}**"
+            embed.add_field(name="🔄 Retry Status", value=retry_text, inline=True)
+        
+        # Recent failures
+        recent_24h = stats.get("recent_failures_24h", 0)
+        recent_text = f"**{recent_24h}** in last 24h"
+        embed.add_field(name="⏰ Recent Failures", value=recent_text, inline=True)
+        
+        # Time range
+        if stats.get("oldest_failure") and stats.get("newest_failure"):
+            from datetime import datetime
+            oldest = datetime.fromisoformat(stats["oldest_failure"].replace('Z', '+00:00'))
+            newest = datetime.fromisoformat(stats["newest_failure"].replace('Z', '+00:00'))
+            
+            time_text = f"📅 **Oldest:** {oldest.strftime('%Y-%m-%d %H:%M')}\n"
+            time_text += f"📅 **Newest:** {newest.strftime('%Y-%m-%d %H:%M')}"
+            embed.add_field(name="📈 Time Range", value=time_text, inline=False)
+        
+        embed.set_footer(text="Use /dlq_view to see specific failed items")
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        logger.error(f"Failed to process dlq_stats command: {e}")
+        await interaction.followup.send("❌ An error occurred while fetching DLQ statistics.")
+
+@discord.app_commands.describe(
+    failure_type="Filter by failure type",
+    limit="Number of items to show (max 20)"
+)
+async def dlq_view_command(interaction: discord.Interaction, failure_type: str = None, limit: int = 10):
+    """View dead letter queue items (Admin only)."""
+    try:
+        # Check admin permissions
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need 'Administrator' permission to view DLQ items.", ephemeral=True)
+            return
+        
+        # Validate limit
+        if limit > 20:
+            limit = 20
+        elif limit < 1:
+            limit = 1
+        
+        await interaction.response.defer()
+        
+        # Prepare query parameters
+        params = {"limit": limit}
+        if failure_type:
+            params["failure_type"] = failure_type
+        
+        # Get DLQ items from backend
+        bot = interaction.client
+        query_string = "&".join([f"{k}={v}" for k, v in params.items()])
+        response = await bot._send_to_backend(f"/admin/dlq/items?{query_string}", {}, method="GET")
+        
+        if not response:
+            await interaction.followup.send("❌ Failed to fetch DLQ items.")
+            return
+        
+        items = response.get("items", [])
+        
+        if not items:
+            embed = discord.Embed(
+                title="📋 Dead Letter Queue Items",
+                description="✅ No failed items found!",
+                color=0x00ff00
+            )
+            await interaction.followup.send(embed=embed)
+            return
+        
+        # Create items display
+        embed = discord.Embed(
+            title="📋 Dead Letter Queue Items",
+            description=f"Showing **{len(items)}** failed items",
+            color=0xff6600
+        )
+        
+        for i, item in enumerate(items[:5]):  # Show max 5 items per embed
+            failure_emoji = {
+                "download": "⬇️", "parsing": "📄", "ocr": "👁️",
+                "api": "🔌", "network": "🌐", "validation": "✅", "unknown": "❓"
+            }.get(item.get("failure_type", "unknown"), "❓")
+            
+            # Format timestamp
+            from datetime import datetime
+            timestamp = datetime.fromisoformat(item["timestamp"].replace('Z', '+00:00'))
+            time_str = timestamp.strftime('%m/%d %H:%M')
+            
+            # Create field value
+            url_preview = item.get("url", "")[:50] + "..." if len(item.get("url", "")) > 50 else item.get("url", "")
+            error_preview = item.get("error", "")[:100] + "..." if len(item.get("error", "")) > 100 else item.get("error", "")
+            
+            retry_count = item.get("retry_count", 0)
+            retry_text = f" (🔄 {retry_count} retries)" if retry_count > 0 else ""
+            
+            field_value = f"**URL:** {url_preview}\n"
+            field_value += f"**Error:** {error_preview}\n"
+            field_value += f"**Step:** {item.get('step', 'unknown')}\n"
+            field_value += f"**Time:** {time_str}{retry_text}"
+            
+            embed.add_field(
+                name=f"{failure_emoji} {item.get('failure_type', 'unknown').title()} #{i+1}",
+                value=field_value,
+                inline=False
+            )
+        
+        if len(items) > 5:
+            embed.set_footer(text=f"Showing first 5 of {len(items)} items. Use limit parameter to see more.")
+        else:
+            embed.set_footer(text="Use /dlq_retry <item_id> to retry a specific item")
+        
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        logger.error(f"Failed to process dlq_view command: {e}")
+        await interaction.followup.send("❌ An error occurred while fetching DLQ items.")
+
+@discord.app_commands.describe(
+    days="Remove items older than this many days (default: 30)"
+)
+async def dlq_cleanup_command(interaction: discord.Interaction, days: int = 30):
+    """Clean up old dead letter queue items (Admin only)."""
+    try:
+        # Check admin permissions
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ You need 'Administrator' permission to cleanup DLQ.", ephemeral=True)
+            return
+        
+        # Validate days
+        if days < 1:
+            days = 1
+        elif days > 365:
+            days = 365
+        
+        await interaction.response.defer()
+        
+        # Send cleanup request to backend
+        bot = interaction.client
+        response = await bot._send_to_backend(f"/admin/dlq/cleanup", {"days": days})
+        
+        if not response:
+            await interaction.followup.send("❌ Failed to cleanup DLQ.")
+            return
+        
+        removed_count = response.get("removed_count", 0)
+        
+        if removed_count == 0:
+            embed = discord.Embed(
+                title="🧹 DLQ Cleanup Complete",
+                description="✅ No old items found to remove.",
+                color=0x00ff00
+            )
+        else:
+            embed = discord.Embed(
+                title="🧹 DLQ Cleanup Complete",
+                description=f"✅ Removed **{removed_count}** items older than {days} days.",
+                color=0x00ff00
+            )
+        
+        embed.set_footer(text="Cleanup helps maintain optimal DLQ performance")
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        logger.error(f"Failed to process dlq_cleanup command: {e}")
+        await interaction.followup.send("❌ An error occurred during DLQ cleanup.")
+
 def setup_bot():
     """Create and configure the bot instance."""
     bot = VitaDiscordBot()
@@ -656,6 +876,31 @@ def setup_bot():
             name="ingest_history",
             description="Ingest channel message history and threads into the knowledge base",
             callback=ingest_history_command
+        )
+    )
+    
+    # Admin commands for DLQ management
+    bot.tree.add_command(
+        discord.app_commands.Command(
+            name="dlq_stats",
+            description="View dead letter queue statistics (Admin only)",
+            callback=dlq_stats_command
+        )
+    )
+    
+    bot.tree.add_command(
+        discord.app_commands.Command(
+            name="dlq_view",
+            description="View dead letter queue items (Admin only)",
+            callback=dlq_view_command
+        )
+    )
+    
+    bot.tree.add_command(
+        discord.app_commands.Command(
+            name="dlq_cleanup",
+            description="Clean up old dead letter queue items (Admin only)",
+            callback=dlq_cleanup_command
         )
     )
     
