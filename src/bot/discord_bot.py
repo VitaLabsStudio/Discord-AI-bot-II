@@ -200,6 +200,9 @@ class VitaDiscordBot(commands.Bot):
             return None
         
         url = f"{self.backend_url}{endpoint}"
+        logger.debug(f"Sending {method} request to: {url}")
+        logger.debug(f"Headers: {self.headers}")
+        logger.debug(f"Data: {data}")
         
         for attempt in range(max_retries + 1):
             try:
@@ -435,7 +438,9 @@ async def ask_command(interaction: discord.Interaction, question: str):
         
         # Send query to backend
         bot = interaction.client
+        logger.info(f"Sending query to backend: {query_data}")
         response = await bot._send_to_backend("/query", query_data)
+        logger.info(f"Backend response: {response}")
         
         if not response:
             await interaction.followup.send("❌ Sorry, I couldn't process your question right now. Please try again later.")
@@ -501,7 +506,10 @@ async def ask_command(interaction: discord.Interaction, question: str):
         await interaction.followup.send(embed=embed, view=feedback_view)
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         logger.error(f"Failed to process ask command: {e}")
+        logger.error(f"Full traceback: {error_details}")
         await interaction.followup.send("❌ An error occurred while processing your question. Please try again later.")
 
 @discord.app_commands.describe(
