@@ -84,6 +84,9 @@ async def ingest_message(
         202 Accepted response
     """
     try:
+        # Log the incoming request for verification
+        logger.info(f"Received ingestion request for message {request.message_id}")
+        
         # Check for idempotency
         if is_processed(request.message_id):
             logger.info(f"Message {request.message_id} already processed")

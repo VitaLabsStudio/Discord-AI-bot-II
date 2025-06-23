@@ -31,29 +31,29 @@ An advanced Discord bot powered by AI that can ingest, process, and answer quest
 ### Installation
 
 1. **Clone the repository**:
-   ```bash
+```bash
    git clone https://github.com/VitaLabsStudio/Discord-AI-bot-II.git
    cd Discord-AI-bot-II
-   ```
+```
 
 2. **Create and activate virtual environment**:
-   ```bash
+```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+pip install -r requirements.txt
+```
 
 4. **Configure environment variables**:
-   ```bash
+```bash
    cp env.example .env
-   ```
-   
-   Edit the `.env` file with your actual configuration:
-   ```env
+```
+
+Edit the `.env` file with your actual configuration:
+```env
    DISCORD_TOKEN=your_discord_bot_token_here
    OPENAI_API_KEY=your_openai_api_key_here
    PINECONE_API_KEY=your_pinecone_api_key_here

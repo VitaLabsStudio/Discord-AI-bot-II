@@ -42,7 +42,7 @@ class VitaDiscordBot(commands.Bot):
         # Create persistent HTTP session
         self.session = aiohttp.ClientSession(
             headers={"X-API-Key": self.api_key},
-            timeout=aiohttp.ClientTimeout(total=30)
+            timeout=aiohttp.ClientTimeout(total=120)  # Increased to 2 minutes for heavy processing
         )
         
         # Sync commands
@@ -68,9 +68,21 @@ class VitaDiscordBot(commands.Bot):
         # Skip bot messages
         if message.author.bot:
             return
-        
+
+        # Determine the message context for logging
+        if isinstance(message.channel, discord.Thread):
+            source_description = f"thread '{message.channel.name}' ({message.channel.id})"
+        else:
+            source_description = f"channel '#{message.channel.name}' ({message.channel.id})"
+
+        logger.info(f"--- Message Received ---")
+        logger.info(f"Message ID: {message.id} from User: {message.author.id}")
+        logger.info(f"Source: {source_description}")
+        logger.info(f"Content length: {len(message.content)}, Attachments: {len(message.attachments)}")
+
         # Skip if no content and no attachments
         if not message.content and not message.attachments:
+            logger.info("Skipping message: No content or attachments.")
             return
         
         try:
@@ -105,19 +117,23 @@ class VitaDiscordBot(commands.Bot):
                 "roles": user_roles if user_roles else None
             }
             
+            # Log before sending to backend
+            logger.info(f"Sending message {message.id} to backend for ingestion.")
+            
             # Send to backend for processing
             await self._send_to_backend("/ingest", ingest_data)
             
         except Exception as e:
             logger.error(f"Failed to process message {message.id}: {e}")
     
-    async def _send_to_backend(self, endpoint: str, data: Dict[str, Any]) -> Optional[Dict]:
+    async def _send_to_backend(self, endpoint: str, data: Dict[str, Any], max_retries: int = 2) -> Optional[Dict]:
         """
-        Send data to backend API.
+        Send data to backend API with retry logic.
         
         Args:
             endpoint: API endpoint
             data: Data to send
+            max_retries: Maximum number of retry attempts
             
         Returns:
             Response data or None if failed
@@ -126,18 +142,40 @@ class VitaDiscordBot(commands.Bot):
             logger.error("HTTP session not initialized")
             return None
         
-        try:
-            url = f"{self.backend_url}{endpoint}"
-            async with self.session.post(url, json=data) as response:
-                if response.status in [200, 202]:
-                    return await response.json()
+        url = f"{self.backend_url}{endpoint}"
+        
+        for attempt in range(max_retries + 1):
+            try:
+                async with self.session.post(url, json=data) as response:
+                    if response.status in [200, 202]:
+                        return await response.json()
+                    elif response.status == 500 and attempt < max_retries:
+                        # Retry on server errors
+                        logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                        await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"Backend request failed: {response.status} - {await response.text()}")
+                        return None
+                        
+            except asyncio.TimeoutError:
+                if attempt < max_retries:
+                    logger.warning(f"Request timeout (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    continue
                 else:
-                    logger.error(f"Backend request failed: {response.status} - {await response.text()}")
+                    logger.error(f"Request timeout after {max_retries + 1} attempts")
                     return None
-                    
-        except Exception as e:
-            logger.error(f"Failed to send request to backend: {e}")
-            return None
+            except Exception as e:
+                if attempt < max_retries:
+                    logger.warning(f"Request failed (attempt {attempt + 1}/{max_retries + 1}): {e}, retrying...")
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+                else:
+                    logger.error(f"Failed to send request to backend after {max_retries + 1} attempts: {e}")
+                    return None
+        
+        return None
 
 # Slash Commands
 @discord.app_commands.describe(
@@ -309,7 +347,7 @@ async def ingest_history_command(interaction: discord.Interaction, limit: int = 
                     }
                     
                     channel_messages.append(message_data)
-                
+                    
                 # Send batch request for this channel if we have messages
                 if channel_messages:
                     batch_data = {"messages": channel_messages}

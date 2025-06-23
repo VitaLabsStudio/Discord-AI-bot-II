@@ -81,6 +81,7 @@ async def run_ingestion_task(req: IngestRequest):
         
         # Combine all content
         combined_content = "\n\n".join(all_content)
+        logger.info(f"Message {req.message_id}: Combined and cleaned content length: {len(combined_content)}")
         
         # Split content into chunks
         chunks = split_text_for_embedding(combined_content)
@@ -89,7 +90,7 @@ async def run_ingestion_task(req: IngestRequest):
             mark_processed(req.message_id)
             return
         
-        logger.info(f"Generated {len(chunks)} chunks for message {req.message_id}")
+        logger.info(f"Message {req.message_id}: Split into {len(chunks)} chunks for embedding.")
         
         # Generate embeddings
         try:
@@ -97,6 +98,7 @@ async def run_ingestion_task(req: IngestRequest):
             if not embeddings:
                 logger.error(f"Failed to generate embeddings for message {req.message_id}")
                 return
+            logger.info(f"Message {req.message_id}: Generated {len(embeddings)} embedding vectors.")
         except Exception as e:
             logger.error(f"Error generating embeddings for message {req.message_id}: {e}")
             return
@@ -127,10 +129,13 @@ async def run_ingestion_task(req: IngestRequest):
                 metadata = permission_manager.add_permission_metadata(metadata, req.roles)
             
             metadatas.append(metadata)
+            # Debug log for metadata creation (limit content preview)
+            logger.debug(f"Message {req.message_id}, Chunk {i}: Metadata created, content preview: '{chunk[:80]}...'")
         
         # Store embeddings in Pinecone
         try:
             embedding_manager.store_embeddings(embeddings, metadatas)
+            logger.info(f"Message {req.message_id}: Sent {len(chunks)} vectors to Pinecone for storage.")
         except Exception as e:
             logger.error(f"Error storing embeddings for message {req.message_id}: {e}")
             return
