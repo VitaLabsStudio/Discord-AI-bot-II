@@ -215,10 +215,16 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
         
         # *** NEW: Enhanced Ontology Tagging and Knowledge Graph Update ***
         try:
+            # Skip ontology enhancement if we're experiencing rate limits
             await _enhance_with_ontology_and_graph(req.message_id, combined_content, log_details)
         except Exception as ontology_error:
-            logger.warning(f"Ontology enhancement failed for message {req.message_id}: {ontology_error}")
-            log_details.append(f"Ontology enhancement failed: {str(ontology_error)}")
+            error_str = str(ontology_error).lower()
+            if "rate limit" in error_str or "429" in error_str:
+                logger.warning(f"Skipping ontology enhancement due to rate limits for message {req.message_id}")
+                log_details.append("Skipped ontology enhancement due to rate limits")
+            else:
+                logger.warning(f"Ontology enhancement failed for message {req.message_id}: {ontology_error}")
+                log_details.append(f"Ontology enhancement failed: {str(ontology_error)}")
             # Don't fail the entire ingestion if ontology enhancement fails
         
         # Mark as processed

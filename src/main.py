@@ -3,6 +3,8 @@ import signal
 import multiprocessing as mp
 from multiprocessing import Process
 import uvicorn
+import socket
+import psutil
 from dotenv import load_dotenv
 
 # Use relative imports for proper module structure
@@ -14,18 +16,55 @@ load_dotenv()
 
 logger = get_logger(__name__)
 
+def check_port_available(port: int) -> bool:
+    """Check if a port is available."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(('localhost', port))
+            return True
+        except OSError:
+            return False
+
+def kill_existing_processes():
+    """Kill any existing VITA processes to prevent conflicts."""
+    current_pid = os.getpid()
+    killed_count = 0
+    
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if proc.info['pid'] == current_pid:
+                continue
+                
+            cmdline = proc.info.get('cmdline', [])
+            if cmdline and any('src.main' in str(cmd) for cmd in cmdline):
+                logger.info(f"Killing existing VITA process {proc.info['pid']}")
+                proc.kill()
+                killed_count += 1
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    
+    if killed_count > 0:
+        logger.info(f"Killed {killed_count} existing VITA processes")
+        import time
+        time.sleep(2)  # Give time for processes to die
+
 def run_backend():
     """Run the FastAPI backend server."""
     try:
         # Setup multiprocessing logging
         setup_multiprocessing_logging()
         
+        # Check if port is available
+        port = int(os.getenv("BACKEND_PORT", 8000))
+        if not check_port_available(port):
+            logger.error(f"Port {port} is already in use. Cannot start backend.")
+            return
+        
         # Import the FastAPI app with relative import
         from .backend.api import app
         
         # Get configuration
         host = os.getenv("BACKEND_HOST", "0.0.0.0")
-        port = int(os.getenv("BACKEND_PORT", 8000))
         log_level = os.getenv("LOG_LEVEL", "info").lower()
         
         logger.info(f"Starting FastAPI backend on {host}:{port}")
@@ -91,6 +130,9 @@ def main():
         
         logger.info("Starting VITA Discord AI Knowledge Assistant")
         logger.info("Press Ctrl+C to stop the application")
+        
+        # Clean up any existing processes
+        kill_existing_processes()
         
         # Set up signal handlers
         signal.signal(signal.SIGINT, signal_handler)

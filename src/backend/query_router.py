@@ -69,9 +69,34 @@ class QueryRouter:
             if keyword.lower() in normalized_query:
                 return response
         
-        # Check for greeting patterns
+        # Check for greeting patterns - but only if the query is primarily a greeting
         greeting_words = ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening']
-        if any(greeting in normalized_query for greeting in greeting_words):
+        
+        # Use original query (not normalized) for greeting detection
+        original_lower = query.lower().strip()
+        original_words = original_lower.split()
+        
+        # Question indicators that suggest this is a real question, not just a greeting
+        question_indicators = ['what', 'how', 'when', 'where', 'why', 'who', 'which', 'can', 'could', 'should', 'would', 'is', 'are', 'do', 'does', 'did', 'will', 'would', 'tell', 'explain', 'show', 'find', 'help', 'get', 'give', 'status', 'update', 'latest', '?']
+        
+        # Only treat as greeting if:
+        # 1. Query is very short (1-2 words) AND contains only greeting words, OR  
+        # 2. Query contains greeting words but NO question indicators
+        is_greeting = False
+        
+        if len(original_words) <= 2:
+            # Very short query - check if it's only greetings and pleasantries
+            non_greeting_words = [word for word in original_words if word not in greeting_words and word not in ['there', 'everyone', 'all']]
+            is_greeting = len(non_greeting_words) == 0
+        else:
+            # Longer query - only treat as greeting if it has NO question indicators
+            has_greeting = any(greeting in original_lower for greeting in greeting_words)
+            has_question_content = any(indicator in original_lower for indicator in question_indicators)
+            
+            # Must have greeting AND no question content to be treated as greeting
+            is_greeting = has_greeting and not has_question_content
+        
+        if is_greeting:
             greeting_responses = self.faq_data.get("greeting_responses", [])
             if greeting_responses:
                 return random.choice(greeting_responses)

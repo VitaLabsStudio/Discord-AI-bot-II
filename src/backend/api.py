@@ -252,77 +252,179 @@ async def query_knowledge(
             logger.info(f"Query answered by router ({routed_response['source']})")
             return response
         
-        # If not routed, proceed with full AI pipeline with evidence chain tracking
+        # If not routed, proceed with AI pipeline
         logger.info(f"Query routed to AI pipeline for user {request.user_id}")
         
-        # v5.1: Create evidence chain for traceability
-        chain_id = vita_db.create_evidence_chain(request.question, request.user_id)
-        evidence_data = {
-            "retrieved_docs": [],
-            "kg_nodes": [],
-            "reasoning_steps": [],
-            "fallback_reasons": []
-        }
-        
+        # Try enhanced v5.1 pipeline first, fall back to basic RAG if rate limited
         try:
-            # Generate multi-hop reasoning plan
-            reasoning_plan = await _generate_reasoning_plan(request.question, request.user_roles)
-            vita_db.update_evidence_chain(chain_id, reasoning_plan=reasoning_plan)
-            
-            # Execute iterative query pipeline
-            answer_result = await _execute_multi_hop_query(
-                request, reasoning_plan, evidence_data, chain_id
-            )
-            
-            # Update evidence chain with final results
-            vita_db.update_evidence_chain(
-                chain_id,
-                evidence_data=evidence_data,
-                final_narrative=answer_result["answer"],
-                was_successful=answer_result["was_successful"]
-            )
-            
-            response = QueryResponse(
-                answer=answer_result["answer"],
-                citations=answer_result["citations"],
-                confidence=answer_result["confidence"]
-            )
-            
-            logger.info(f"Generated response with evidence chain {chain_id}")
-            return response
-            
+            return await _execute_enhanced_query(request)
         except Exception as e:
-            # Fallback mechanism: proceed with partial evidence
-            logger.warning(f"Evidence chain {chain_id} encountered error: {e}")
-            evidence_data["fallback_reasons"].append(str(e))
-            
-            # Generate fallback response
-            fallback_result = await _generate_fallback_response(request, evidence_data)
-            
-            vita_db.update_evidence_chain(
-                chain_id,
-                evidence_data=evidence_data,
-                final_narrative=fallback_result["answer"],
-                was_successful=False
-            )
-            
-            return QueryResponse(
-                answer=fallback_result["answer"],
-                citations=fallback_result["citations"],
-                confidence=fallback_result["confidence"]
-            )
+            error_str = str(e).lower()
+            if "rate limit" in error_str or "429" in error_str:
+                logger.warning(f"Rate limit detected, falling back to basic RAG for user {request.user_id}")
+                return await _execute_basic_query(request)
+            else:
+                raise e
         
     except Exception as e:
         logger.error(f"Failed to process query: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process query: {str(e)}")
 
-async def _generate_reasoning_plan(question: str, user_roles: list = None) -> str:
+async def _execute_enhanced_query(request: QueryRequest) -> QueryResponse:
+    """Execute the full v5.1 enhanced query with evidence chains."""
+    # v5.1: Create evidence chain for traceability
+    chain_id = vita_db.create_evidence_chain(request.question, request.user_id)
+    evidence_data = {
+        "retrieved_docs": [],
+        "kg_nodes": [],
+        "reasoning_steps": [],
+        "fallback_reasons": []
+    }
+    
+    try:
+        # Generate multi-hop reasoning plan
+        reasoning_plan = await _generate_reasoning_plan(request.question, request.roles)
+        vita_db.update_evidence_chain(chain_id, reasoning_plan=reasoning_plan)
+        
+        # Execute iterative query pipeline
+        answer_result = await _execute_multi_hop_query(
+            request, reasoning_plan, evidence_data, chain_id
+        )
+        
+        # Update evidence chain with final results
+        vita_db.update_evidence_chain(
+            chain_id,
+            evidence_data=evidence_data,
+            final_narrative=answer_result["answer"],
+            was_successful=answer_result["was_successful"]
+        )
+        
+        response = QueryResponse(
+            answer=answer_result["answer"],
+            citations=answer_result["citations"],
+            confidence=answer_result["confidence"]
+        )
+        
+        logger.info(f"Generated enhanced response with evidence chain {chain_id}")
+        return response
+        
+    except Exception as e:
+        # Fallback mechanism: proceed with partial evidence
+        logger.warning(f"Evidence chain {chain_id} encountered error: {e}")
+        evidence_data["fallback_reasons"].append(str(e))
+        
+        # Generate fallback response
+        fallback_result = await _generate_fallback_response(request, evidence_data)
+        
+        vita_db.update_evidence_chain(
+            chain_id,
+            evidence_data=evidence_data,
+            final_narrative=fallback_result["answer"],
+            was_successful=False
+        )
+        
+        return QueryResponse(
+            answer=fallback_result["answer"],
+            citations=fallback_result["citations"],
+            confidence=fallback_result["confidence"]
+        )
+
+async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
+    """Execute basic RAG query without v5.1 features to avoid rate limits."""
+    try:
+        logger.info(f"Executing basic RAG query for user {request.user_id}")
+        
+        # Create permission filter
+        permission_filter = permission_manager.create_permission_filter(
+            request.roles, 
+            request.channel_id
+        )
+        
+        # Do direct vector search
+        similar_docs = await embedding_manager.query_similar(
+            request.question,
+            top_k=request.top_k,
+            filter_dict=permission_filter
+        )
+        
+        # Generate citations
+        citations = []
+        for doc in similar_docs:
+            metadata = doc.get("metadata", {})
+            citation = {
+                "message_id": metadata.get("message_id", ""),
+                "channel_id": metadata.get("channel_id", ""),
+                "user_id": metadata.get("user_id", ""),
+                "timestamp": metadata.get("timestamp", ""),
+                "content_preview": metadata.get("content", "")[:200] + "..." if len(metadata.get("content", "")) > 200 else metadata.get("content", ""),
+                "score": doc.get("score", 0.0)
+            }
+            citations.append(citation)
+        
+        if not citations:
+            return QueryResponse(
+                answer="I couldn't find any relevant information in your server's content for this question. Try rephrasing your query or asking about a different topic.",
+                citations=[],
+                confidence=0.0
+            )
+        
+        # Generate answer using basic LLM call with retry logic
+        try:
+            # Convert docs for LLM
+            context_docs = []
+            for doc in similar_docs:
+                context_docs.append({
+                    "metadata": doc.get("metadata", {}),
+                    "score": doc.get("score", 0.0)
+                })
+            
+            llm_result = await llm_client.generate_answer(
+                question=request.question,
+                context_documents=context_docs,
+                user_id=request.user_id,
+                user_roles=request.roles
+            )
+            
+            return QueryResponse(
+                answer=llm_result["answer"],
+                citations=citations,
+                confidence=llm_result["confidence"]
+            )
+            
+        except Exception as llm_error:
+            # If LLM also fails, return a basic response with citations
+            logger.warning(f"LLM call failed in basic mode: {llm_error}")
+            
+            # Create a simple response based on the most relevant citation
+            if citations:
+                top_citation = citations[0]
+                answer = f"Based on the most relevant information I found:\n\n{top_citation['content_preview']}\n\nThis information comes from a message in your server. You can view more details in the sources below."
+                confidence = min(top_citation['score'], 0.6)  # Cap confidence for basic response
+            else:
+                answer = "I found some relevant content but couldn't generate a detailed response. Please check the sources below."
+                confidence = 0.3
+            
+            return QueryResponse(
+                answer=answer,
+                citations=citations,
+                confidence=confidence
+            )
+        
+    except Exception as e:
+        logger.error(f"Basic query execution failed: {e}")
+        return QueryResponse(
+            answer="I apologize, but I encountered difficulties processing your question. Please try again in a moment or rephrase your query.",
+            citations=[],
+            confidence=0.0
+        )
+
+async def _generate_reasoning_plan(question: str, roles: list = None) -> str:
     """
     Generate a multi-step reasoning plan for complex queries.
     
     Args:
         question: User's question
-        user_roles: User's roles for context
+        roles: User's roles for context
         
     Returns:
         JSON string of reasoning plan

@@ -184,13 +184,13 @@ class VitaDiscordBot(commands.Bot):
     
     async def _send_to_backend(self, endpoint: str, data: Dict[str, Any] = None, max_retries: int = 2, method: str = "POST") -> Optional[Dict]:
         """
-        Send data to backend API with retry logic.
+        Send request to backend API with retry logic and improved error handling.
         
         Args:
             endpoint: API endpoint
-            data: Data to send (for POST requests)
-            max_retries: Maximum number of retry attempts
-            method: HTTP method ("POST", "GET", or "DELETE")
+            data: Request data
+            max_retries: Maximum retry attempts
+            method: HTTP method
             
         Returns:
             Response data or None if failed
@@ -200,28 +200,31 @@ class VitaDiscordBot(commands.Bot):
             return None
         
         url = f"{self.backend_url}{endpoint}"
-        logger.debug(f"Sending {method} request to: {url}")
-        logger.debug(f"Headers: {self.headers}")
-        logger.debug(f"Data: {data}")
+        logger.debug(f"Sending {method} request to {url}")
         
         for attempt in range(max_retries + 1):
             try:
                 if method.upper() == "GET":
                     async with self.session.get(url) as response:
                         if response.status == 200:
-                            return await response.json()
+                            result = await response.json()
+                            logger.debug(f"Backend {method} successful: {response.status}")
+                            return result
                         elif response.status == 500 and attempt < max_retries:
                             logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
                             await asyncio.sleep(2 ** attempt)
                             continue
                         else:
-                            logger.error(f"Backend GET request failed: {response.status} - {await response.text()}")
+                            error_text = await response.text()
+                            logger.error(f"Backend GET request failed: {response.status} - {error_text}")
                             return None
                 elif method.upper() == "DELETE":
                     async with self.session.delete(url) as response:
                         if response.status in [200, 202, 204]:
                             try:
-                                return await response.json()
+                                result = await response.json()
+                                logger.debug(f"Backend DELETE successful: {response.status}")
+                                return result
                             except:
                                 # DELETE might not return JSON content
                                 return {"status": "success"}
@@ -230,19 +233,23 @@ class VitaDiscordBot(commands.Bot):
                             await asyncio.sleep(2 ** attempt)
                             continue
                         else:
-                            logger.error(f"Backend DELETE request failed: {response.status} - {await response.text()}")
+                            error_text = await response.text()
+                            logger.error(f"Backend DELETE request failed: {response.status} - {error_text}")
                             return None
                 else:  # POST
                     async with self.session.post(url, json=data) as response:
                         if response.status in [200, 202]:
-                            return await response.json()
+                            result = await response.json()
+                            logger.debug(f"Backend POST successful: {response.status}")
+                            return result
                         elif response.status == 500 and attempt < max_retries:
                             # Retry on server errors
                             logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
                             await asyncio.sleep(2 ** attempt)  # Exponential backoff
                             continue
                         else:
-                            logger.error(f"Backend request failed: {response.status} - {await response.text()}")
+                            error_text = await response.text()
+                            logger.error(f"Backend POST request failed: {response.status} - {error_text}")
                             return None
                         
             except asyncio.TimeoutError:
@@ -438,9 +445,7 @@ async def ask_command(interaction: discord.Interaction, question: str):
         
         # Send query to backend
         bot = interaction.client
-        logger.info(f"Sending query to backend: {query_data}")
         response = await bot._send_to_backend("/query", query_data)
-        logger.info(f"Backend response: {response}")
         
         if not response:
             await interaction.followup.send("❌ Sorry, I couldn't process your question right now. Please try again later.")
@@ -505,12 +510,29 @@ async def ask_command(interaction: discord.Interaction, question: str):
         
         await interaction.followup.send(embed=embed, view=feedback_view)
         
+    except discord.InteractionAlreadyAcknowledged:
+        # Interaction was already acknowledged, don't send duplicate responses
+        logger.warning(f"Interaction {interaction.id} already acknowledged")
+        return
+    except discord.NotFound:
+        # Interaction expired or not found, don't send error response
+        logger.warning(f"Interaction {interaction.id} not found or expired")
+        return
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
         logger.error(f"Failed to process ask command: {e}")
         logger.error(f"Full traceback: {error_details}")
-        await interaction.followup.send("❌ An error occurred while processing your question. Please try again later.")
+        
+        # Only send error response if interaction hasn't been responded to
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.send_message("❌ An error occurred while processing your question. Please try again later.", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ An error occurred while processing your question. Please try again later.", ephemeral=True)
+        except (discord.InteractionAlreadyAcknowledged, discord.NotFound, discord.HTTPException):
+            # If we can't send error response, just log it
+            logger.error("Could not send error response to user - interaction already handled")
 
 @discord.app_commands.describe(
     limit="Number of messages per channel to ingest (default: 100, max: 1000). Threads will be fully processed."
