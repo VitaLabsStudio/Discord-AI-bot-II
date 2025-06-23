@@ -156,18 +156,39 @@ class FileProcessor:
             Extracted text from image
         """
         try:
+            # Validate image size
+            if len(content) > 50 * 1024 * 1024:  # 50MB limit
+                logger.warning(f"Image too large ({len(content)} bytes): {url}")
+                self._log_to_dead_letter_queue(url, "Image exceeds 50MB limit", "size_check")
+                return ""
+            
             # Open image with PIL
-            image = Image.open(BytesIO(content))
+            try:
+                image = Image.open(BytesIO(content))
+            except Exception as e:
+                logger.error(f"Failed to open image {url}: {e}")
+                self._log_to_dead_letter_queue(url, f"PIL error: {str(e)}", "pil_open")
+                return ""
             
             # Convert to RGB if necessary
             if image.mode != 'RGB':
-                image = image.convert('RGB')
+                try:
+                    image = image.convert('RGB')
+                except Exception as e:
+                    logger.error(f"Failed to convert image to RGB {url}: {e}")
+                    self._log_to_dead_letter_queue(url, f"RGB conversion error: {str(e)}", "rgb_conversion")
+                    return ""
             
             # Extract text using OCR
-            extracted_text = pytesseract.image_to_string(
-                image, 
-                lang=self.tesseract_languages
-            )
+            try:
+                extracted_text = pytesseract.image_to_string(
+                    image, 
+                    lang=self.tesseract_languages
+                )
+            except Exception as e:
+                logger.error(f"Tesseract OCR failed for {url}: {e}")
+                self._log_to_dead_letter_queue(url, f"Tesseract error: {str(e)}", "tesseract_ocr")
+                return ""
             
             cleaned_text = clean_text(extracted_text)
             logger.debug(f"Extracted {len(cleaned_text)} characters from image {url}")
@@ -175,8 +196,8 @@ class FileProcessor:
             return cleaned_text
             
         except Exception as e:
-            logger.error(f"OCR error for {url}: {e}")
-            self._log_to_dead_letter_queue(url, str(e), "ocr")
+            logger.error(f"Unexpected OCR error for {url}: {e}")
+            self._log_to_dead_letter_queue(url, f"Unexpected error: {str(e)}", "ocr_general")
             return ""
     
     async def _process_document(self, content: bytes, url: str) -> str:

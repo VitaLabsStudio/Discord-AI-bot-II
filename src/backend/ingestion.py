@@ -92,9 +92,13 @@ async def run_ingestion_task(req: IngestRequest):
         logger.info(f"Generated {len(chunks)} chunks for message {req.message_id}")
         
         # Generate embeddings
-        embeddings = await embedding_manager.embed_chunks(chunks)
-        if not embeddings:
-            logger.error(f"Failed to generate embeddings for message {req.message_id}")
+        try:
+            embeddings = await embedding_manager.embed_chunks(chunks)
+            if not embeddings:
+                logger.error(f"Failed to generate embeddings for message {req.message_id}")
+                return
+        except Exception as e:
+            logger.error(f"Error generating embeddings for message {req.message_id}: {e}")
             return
         
         # Create metadata for each chunk
@@ -125,7 +129,11 @@ async def run_ingestion_task(req: IngestRequest):
             metadatas.append(metadata)
         
         # Store embeddings in Pinecone
-        embedding_manager.store_embeddings(embeddings, metadatas)
+        try:
+            embedding_manager.store_embeddings(embeddings, metadatas)
+        except Exception as e:
+            logger.error(f"Error storing embeddings for message {req.message_id}: {e}")
+            return
         
         # Mark as processed
         mark_processed(req.message_id)

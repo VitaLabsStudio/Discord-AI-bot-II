@@ -4,6 +4,8 @@ import multiprocessing as mp
 from multiprocessing import Process
 import uvicorn
 from dotenv import load_dotenv
+
+# Use relative imports for proper module structure
 from .backend.logger import get_logger, setup_multiprocessing_logging
 from .bot.discord_bot import run_discord_bot
 
@@ -18,7 +20,7 @@ def run_backend():
         # Setup multiprocessing logging
         setup_multiprocessing_logging()
         
-        # Import the FastAPI app
+        # Import the FastAPI app with relative import
         from .backend.api import app
         
         # Get configuration
@@ -60,21 +62,31 @@ def signal_handler(signum, frame):
     """Handle shutdown signals."""
     logger.info(f"Received signal {signum}, shutting down...")
     
+def validate_environment():
+    """Validate all required environment variables are set."""
+    required_vars = [
+        "DISCORD_TOKEN",
+        "OPENAI_API_KEY", 
+        "PINECONE_API_KEY",
+        "BACKEND_API_KEY"
+    ]
+    
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    if missing_vars:
+        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
+        logger.error("Please check your .env file and ensure all required variables are set.")
+        logger.error("Copy env.example to .env and fill in your API keys:")
+        for var in missing_vars:
+            logger.error(f"  {var}=your_{var.lower()}_here")
+        return False
+    
+    return True
+
 def main():
     """Main entry point that starts both backend and bot processes."""
     try:
-        # Validate environment variables
-        required_vars = [
-            "DISCORD_TOKEN",
-            "OPENAI_API_KEY",
-            "PINECONE_API_KEY",
-            "BACKEND_API_KEY"
-        ]
-        
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
-        if missing_vars:
-            logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
-            logger.error("Please check your .env file and ensure all required variables are set.")
+        # Validate environment variables first
+        if not validate_environment():
             return
         
         logger.info("Starting VITA Discord AI Knowledge Assistant")
@@ -95,6 +107,8 @@ def main():
         logger.info("Both processes started successfully")
         logger.info(f"Backend PID: {backend_process.pid}")
         logger.info(f"Bot PID: {bot_process.pid}")
+        logger.info("Backend available at: http://localhost:8000")
+        logger.info("Backend health check: http://localhost:8000/health")
         
         try:
             # Wait for processes to complete

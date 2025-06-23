@@ -62,7 +62,7 @@ An advanced Discord bot powered by AI that can ingest, process, and answer quest
 
 5. **Run the application**:
    ```bash
-   python src/main.py
+   python -m src.main
    ```
 
 ## 🔧 Configuration

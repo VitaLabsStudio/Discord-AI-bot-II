@@ -127,16 +127,40 @@ async def batch_ingest_messages(
         if not request.messages:
             raise HTTPException(status_code=400, detail="No messages provided")
         
-        # Convert to IngestRequest objects if needed
+        if len(request.messages) > 1000:
+            raise HTTPException(status_code=400, detail="Batch size too large (max 1000 messages)")
+        
+        # Convert to IngestRequest objects if needed with validation
         ingest_requests = []
-        for msg in request.messages:
-            if isinstance(msg, dict):
-                # Convert dict to IngestRequest
-                ingest_req = IngestRequest(**msg)
-            else:
-                # Already an IngestRequest object
-                ingest_req = msg
-            ingest_requests.append(ingest_req)
+        validation_errors = []
+        
+        for i, msg in enumerate(request.messages):
+            try:
+                if isinstance(msg, dict):
+                    # Validate required fields before conversion
+                    required_fields = ["message_id", "channel_id", "user_id", "content", "timestamp"]
+                    missing_fields = [field for field in required_fields if field not in msg]
+                    if missing_fields:
+                        validation_errors.append(f"Message {i}: Missing fields {missing_fields}")
+                        continue
+                    
+                    # Convert dict to IngestRequest
+                    ingest_req = IngestRequest(**msg)
+                else:
+                    # Already an IngestRequest object
+                    ingest_req = msg
+                ingest_requests.append(ingest_req)
+            except Exception as e:
+                validation_errors.append(f"Message {i}: {str(e)}")
+        
+        if validation_errors:
+            error_summary = f"Validation errors in batch: {'; '.join(validation_errors[:5])}"
+            if len(validation_errors) > 5:
+                error_summary += f" (and {len(validation_errors) - 5} more errors)"
+            raise HTTPException(status_code=400, detail=error_summary)
+        
+        if not ingest_requests:
+            raise HTTPException(status_code=400, detail="No valid messages to process")
         
         # Add batch ingestion task to background queue
         background_tasks.add_task(run_batch_ingestion_task, ingest_requests)
@@ -146,6 +170,8 @@ async def batch_ingest_messages(
         return {
             "status": "accepted",
             "message_count": len(ingest_requests),
+            "valid_messages": len(ingest_requests),
+            "total_submitted": len(request.messages),
             "message": "Batch ingestion task queued for processing"
         }
         
