@@ -229,7 +229,7 @@ async def query_knowledge(
     _: bool = Depends(verify_api_key)
 ):
     """
-    Query the knowledge base using enhanced RAG pipeline with query routing.
+    Query the knowledge base using enhanced RAG pipeline with evidence chain tracking.
     
     Args:
         request: QueryRequest with user question and context
@@ -252,8 +252,146 @@ async def query_knowledge(
             logger.info(f"Query answered by router ({routed_response['source']})")
             return response
         
-        # If not routed, proceed with full AI pipeline
+        # If not routed, proceed with full AI pipeline with evidence chain tracking
         logger.info(f"Query routed to AI pipeline for user {request.user_id}")
+        
+        # v5.1: Create evidence chain for traceability
+        chain_id = vita_db.create_evidence_chain(request.question, request.user_id)
+        evidence_data = {
+            "retrieved_docs": [],
+            "kg_nodes": [],
+            "reasoning_steps": [],
+            "fallback_reasons": []
+        }
+        
+        try:
+            # Generate multi-hop reasoning plan
+            reasoning_plan = await _generate_reasoning_plan(request.question, request.user_roles)
+            vita_db.update_evidence_chain(chain_id, reasoning_plan=reasoning_plan)
+            
+            # Execute iterative query pipeline
+            answer_result = await _execute_multi_hop_query(
+                request, reasoning_plan, evidence_data, chain_id
+            )
+            
+            # Update evidence chain with final results
+            vita_db.update_evidence_chain(
+                chain_id,
+                evidence_data=evidence_data,
+                final_narrative=answer_result["answer"],
+                was_successful=answer_result["was_successful"]
+            )
+            
+            response = QueryResponse(
+                answer=answer_result["answer"],
+                citations=answer_result["citations"],
+                confidence=answer_result["confidence"]
+            )
+            
+            logger.info(f"Generated response with evidence chain {chain_id}")
+            return response
+            
+        except Exception as e:
+            # Fallback mechanism: proceed with partial evidence
+            logger.warning(f"Evidence chain {chain_id} encountered error: {e}")
+            evidence_data["fallback_reasons"].append(str(e))
+            
+            # Generate fallback response
+            fallback_result = await _generate_fallback_response(request, evidence_data)
+            
+            vita_db.update_evidence_chain(
+                chain_id,
+                evidence_data=evidence_data,
+                final_narrative=fallback_result["answer"],
+                was_successful=False
+            )
+            
+            return QueryResponse(
+                answer=fallback_result["answer"],
+                citations=fallback_result["citations"],
+                confidence=fallback_result["confidence"]
+            )
+        
+    except Exception as e:
+        logger.error(f"Failed to process query: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process query: {str(e)}")
+
+async def _generate_reasoning_plan(question: str, user_roles: list = None) -> str:
+    """
+    Generate a multi-step reasoning plan for complex queries.
+    
+    Args:
+        question: User's question
+        user_roles: User's roles for context
+        
+    Returns:
+        JSON string of reasoning plan
+    """
+    try:
+        prompt = f"""Analyze this question and create a step-by-step reasoning plan.
+
+Question: {question}
+
+Instructions:
+1. Determine if this is a simple factual query or requires multi-hop reasoning
+2. If multi-hop, break down into logical steps
+3. Identify what types of evidence would be needed for each step
+4. Consider dependencies between steps
+
+Format your response as JSON:
+{{
+    "complexity": "simple|multi_hop",
+    "steps": [
+        {{
+            "step_number": 1,
+            "description": "What to find/verify",
+            "evidence_type": "documents|knowledge_graph|both",
+            "depends_on": []
+        }}
+    ],
+    "expected_evidence_types": ["message_content", "decisions", "relationships"]
+}}
+"""
+        
+        response = await llm_client.client.chat.completions.create(
+            model=llm_client.chat_model,
+            messages=[
+                {"role": "system", "content": "You are an expert query planner who creates structured reasoning plans."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=500
+        )
+        
+        return response.choices[0].message.content.strip()
+        
+    except Exception as e:
+        logger.error(f"Failed to generate reasoning plan: {e}")
+        # Return simple plan as fallback
+        import json
+        return json.dumps({
+            "complexity": "simple",
+            "steps": [{"step_number": 1, "description": "Direct search", "evidence_type": "documents", "depends_on": []}],
+            "expected_evidence_types": ["message_content"]
+        })
+
+async def _execute_multi_hop_query(request: QueryRequest, reasoning_plan: str, 
+                                  evidence_data: dict, chain_id: str) -> dict:
+    """
+    Execute multi-hop reasoning query with evidence tracking.
+    
+    Args:
+        request: Original query request
+        reasoning_plan: JSON reasoning plan
+        evidence_data: Evidence tracking dictionary
+        chain_id: Evidence chain ID
+        
+    Returns:
+        Query result with answer, citations, and success status
+    """
+    try:
+        import json
+        plan = json.loads(reasoning_plan)
         
         # Create permission filter
         permission_filter = permission_manager.create_permission_filter(
@@ -261,22 +399,153 @@ async def query_knowledge(
             request.channel_id
         )
         
-        # Search for relevant documents
+        all_citations = []
+        reasoning_context = []
+        
+        # Execute each reasoning step
+        for step in plan.get("steps", []):
+            step_evidence = await _execute_reasoning_step(
+                step, request.question, permission_filter, evidence_data
+            )
+            
+            reasoning_context.append({
+                "step": step["step_number"],
+                "description": step["description"],
+                "evidence_found": len(step_evidence["documents"]) > 0,
+                "evidence_count": len(step_evidence["documents"])
+            })
+            
+            all_citations.extend(step_evidence["citations"])
+            evidence_data["reasoning_steps"].append(reasoning_context[-1])
+        
+        # Generate final answer with accumulated evidence
+        if all_citations:
+            # Combine all retrieved documents
+            all_docs = []
+            for citation in all_citations:
+                all_docs.append({
+                    "metadata": {
+                        "message_id": citation["message_id"],
+                        "content": citation["content_preview"],
+                        "channel_id": citation["channel_id"],
+                        "user_id": citation["user_id"],
+                        "timestamp": citation["timestamp"]
+                    },
+                    "score": citation["score"]
+                })
+            
+            llm_result = await llm_client.generate_answer(
+                question=request.question,
+                context_documents=all_docs,
+                user_id=request.user_id,
+                user_roles=request.roles
+            )
+            
+            return {
+                "answer": llm_result["answer"],
+                "citations": all_citations,
+                "confidence": llm_result["confidence"],
+                "was_successful": True
+            }
+        else:
+            # No evidence found - use fallback
+            raise Exception("No evidence found for multi-hop reasoning")
+            
+    except Exception as e:
+        logger.error(f"Multi-hop query execution failed: {e}")
+        raise
+
+async def _execute_reasoning_step(step: dict, original_question: str, 
+                                 permission_filter: dict, evidence_data: dict) -> dict:
+    """
+    Execute a single reasoning step.
+    
+    Args:
+        step: Step definition from reasoning plan
+        original_question: Original user question
+        permission_filter: Permission filter for documents
+        evidence_data: Evidence tracking dictionary
+        
+    Returns:
+        Step results with documents and citations
+    """
+    try:
+        evidence_type = step.get("evidence_type", "documents")
+        step_query = f"{step['description']} (related to: {original_question})"
+        
+        documents = []
+        citations = []
+        
+        if evidence_type in ["documents", "both"]:
+            # Search vector database
+            similar_docs = await embedding_manager.query_similar(
+                step_query,
+                top_k=5,
+                filter_dict=permission_filter
+            )
+            
+            for doc in similar_docs:
+                metadata = doc.get("metadata", {})
+                citation = {
+                    "message_id": metadata.get("message_id", ""),
+                    "channel_id": metadata.get("channel_id", ""),
+                    "user_id": metadata.get("user_id", ""),
+                    "timestamp": metadata.get("timestamp", ""),
+                    "content_preview": metadata.get("content", "")[:200] + "..." if len(metadata.get("content", "")) > 200 else metadata.get("content", ""),
+                    "score": doc.get("score", 0.0),
+                    "reasoning_step": step["step_number"]
+                }
+                citations.append(citation)
+                documents.append(doc)
+                evidence_data["retrieved_docs"].append(citation)
+        
+        if evidence_type in ["knowledge_graph", "both"]:
+            # Search knowledge graph for relevant nodes
+            kg_nodes = vita_db.get_active_nodes()  # Could be enhanced with semantic search
+            for node in kg_nodes[:3]:  # Limit to top 3 for now
+                evidence_data["kg_nodes"].append({
+                    "node_id": node.id,
+                    "label": node.label,
+                    "name": node.name,
+                    "step": step["step_number"]
+                })
+        
+        return {
+            "documents": documents,
+            "citations": citations,
+            "step_number": step["step_number"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to execute reasoning step {step.get('step_number', 'unknown')}: {e}")
+        return {"documents": [], "citations": [], "step_number": step.get("step_number", 0)}
+
+async def _generate_fallback_response(request: QueryRequest, evidence_data: dict) -> dict:
+    """
+    Generate a fallback response when evidence chain fails.
+    
+    Args:
+        request: Original query request
+        evidence_data: Partial evidence collected
+        
+    Returns:
+        Fallback response with explanation
+    """
+    try:
+        # Create permission filter
+        permission_filter = permission_manager.create_permission_filter(
+            request.roles, 
+            request.channel_id
+        )
+        
+        # Do basic search as fallback
         similar_docs = await embedding_manager.query_similar(
             request.question,
             top_k=request.top_k,
             filter_dict=permission_filter
         )
         
-        # Generate answer using enhanced LLM with role adaptation
-        llm_result = await llm_client.generate_answer(
-            question=request.question,
-            context_documents=similar_docs,
-            user_id=request.user_id,
-            user_roles=request.roles
-        )
-        
-        # Create citations from source documents
+        # Generate fallback citations
         citations = []
         for doc in similar_docs:
             metadata = doc.get("metadata", {})
@@ -290,18 +559,42 @@ async def query_knowledge(
             }
             citations.append(citation)
         
-        response = QueryResponse(
-            answer=llm_result["answer"],
-            citations=citations,
-            confidence=llm_result["confidence"]
+        # Generate answer with fallback prompt
+        fallback_prompt = f"""Based on the available evidence, please answer this question: {request.question}
+
+Note: The evidence for some parts of this query was incomplete. Please synthesize the answer based on the available evidence and explicitly state any uncertainties or missing links. If you cannot fully answer the question, suggest who might have the answer based on the available context.
+
+Available Evidence:
+{len(similar_docs)} relevant documents found
+{len(evidence_data.get('reasoning_steps', []))} reasoning steps attempted
+Fallback reasons: {', '.join(evidence_data.get('fallback_reasons', []))}
+"""
+        
+        response = await llm_client.client.chat.completions.create(
+            model=llm_client.chat_model,
+            messages=[
+                {"role": "system", "content": llm_client._create_system_prompt(request.roles)},
+                {"role": "user", "content": fallback_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=800
         )
         
-        logger.info(f"Generated response with {len(citations)} citations")
-        return response
+        answer = response.choices[0].message.content.strip()
+        
+        return {
+            "answer": answer,
+            "citations": citations,
+            "confidence": 0.3  # Lower confidence for fallback responses
+        }
         
     except Exception as e:
-        logger.error(f"Failed to process query: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to process query: {str(e)}")
+        logger.error(f"Fallback response generation failed: {e}")
+        return {
+            "answer": "I apologize, but I encountered difficulties processing your question. Please try rephrasing your query or contact an administrator for assistance.",
+            "citations": [],
+            "confidence": 0.0
+        }
 
 @app.post("/feedback")
 async def record_feedback(
@@ -761,6 +1054,342 @@ async def retry_dlq_item(
     except Exception as e:
         logger.error(f"Failed to retry DLQ item {item_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to retry DLQ item: {str(e)}")
+
+# v5.1: Evidence Chain & Traceability Endpoints
+
+@app.get("/evidence_chains/{chain_id}")
+async def get_evidence_chain(
+    chain_id: str,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Get detailed information about an evidence chain for query traceability.
+    
+    Args:
+        chain_id: Evidence chain ID
+        
+    Returns:
+        Evidence chain details with reasoning steps
+    """
+    try:
+        with vita_db.get_session() as session:
+            from .database import EvidenceChain
+            chain = session.query(EvidenceChain).filter(
+                EvidenceChain.chain_id == chain_id
+            ).first()
+            
+            if not chain:
+                raise HTTPException(status_code=404, detail=f"Evidence chain {chain_id} not found")
+            
+            # Parse JSON fields
+            import json
+            evidence_data = {}
+            reasoning_plan = {}
+            
+            try:
+                if chain.evidence_data:
+                    evidence_data = json.loads(chain.evidence_data)
+                if chain.reasoning_plan:
+                    reasoning_plan = json.loads(chain.reasoning_plan)
+            except json.JSONDecodeError:
+                pass
+            
+            return {
+                "chain_id": chain.chain_id,
+                "user_query": chain.user_query,
+                "user_id": chain.user_id,
+                "reasoning_plan": reasoning_plan,
+                "evidence_data": evidence_data,
+                "final_narrative": chain.final_narrative,
+                "was_successful": chain.was_successful,
+                "timestamp": chain.timestamp.isoformat()
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get evidence chain {chain_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get evidence chain: {str(e)}")
+
+@app.get("/evidence_chains/failed")
+async def get_failed_evidence_chains(
+    days: int = 7,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Get evidence chains that failed to resolve (knowledge gaps).
+    
+    Args:
+        days: Number of days to look back (default: 7)
+        
+    Returns:
+        List of failed evidence chains indicating knowledge gaps
+    """
+    try:
+        if days < 1 or days > 30:
+            days = min(max(days, 1), 30)
+        
+        failed_chains = vita_db.get_failed_evidence_chains(days)
+        
+        chains_data = []
+        for chain in failed_chains:
+            chains_data.append({
+                "chain_id": chain.chain_id,
+                "user_query": chain.user_query,
+                "user_id": chain.user_id,
+                "timestamp": chain.timestamp.isoformat(),
+                "reasoning_plan": chain.reasoning_plan
+            })
+        
+        return {
+            "failed_chains": chains_data,
+            "count": len(chains_data),
+            "time_period_days": days,
+            "message": f"Found {len(chains_data)} failed evidence chains in last {days} days"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get failed evidence chains: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get failed evidence chains: {str(e)}")
+
+# v5.1: Knowledge Lifecycle Management Endpoints
+
+@app.get("/knowledge/superseded")
+async def get_superseded_knowledge(
+    days: int = 30,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Get knowledge nodes that have been superseded recently.
+    
+    Args:
+        days: Number of days to look back (default: 30)
+        
+    Returns:
+        List of superseded knowledge with replacement information
+    """
+    try:
+        if days < 1 or days > 90:
+            days = min(max(days, 1), 90)
+        
+        superseded_nodes = vita_db.get_superseded_nodes(days)
+        
+        superseded_data = []
+        for superseded_info in superseded_nodes:
+            superseded_node, edge, superseding_node = superseded_info
+            
+            superseded_data.append({
+                "superseded_node": {
+                    "id": superseded_node.id,
+                    "label": superseded_node.label,
+                    "name": superseded_node.name,
+                    "updated_at": superseded_node.updated_at.isoformat()
+                },
+                "superseding_node": {
+                    "id": superseding_node.id,
+                    "label": superseding_node.label,
+                    "name": superseding_node.name,
+                    "created_at": superseding_node.created_at.isoformat()
+                },
+                "relationship": edge.relationship,
+                "message_id": edge.message_id
+            })
+        
+        return {
+            "superseded_knowledge": superseded_data,
+            "count": len(superseded_data),
+            "time_period_days": days
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get superseded knowledge: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get superseded knowledge: {str(e)}")
+
+@app.get("/knowledge/playbooks/review")
+async def review_playbook_performance(
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Review playbook and SOP performance based on user feedback.
+    
+    Returns:
+        Playbook performance review with recommendations
+    """
+    try:
+        from .analyzer import vita_analyzer
+        
+        review_results = await vita_analyzer.review_playbook_performance()
+        
+        return {
+            "review_results": review_results,
+            "message": f"Reviewed {review_results.get('total_playbooks_reviewed', 0)} playbooks, {review_results.get('flagged_playbooks', 0)} flagged"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to review playbook performance: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to review playbook performance: {str(e)}")
+
+@app.post("/knowledge/supersede")
+async def supersede_knowledge(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Manually supersede a knowledge node (Admin only).
+    
+    Args:
+        request: Dictionary with old_node_id, new_node_id, message_id
+        
+    Returns:
+        Supersession result
+    """
+    try:
+        required_fields = ["old_node_id", "new_node_id"]
+        missing_fields = [field for field in required_fields if field not in request]
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {missing_fields}"
+            )
+        
+        success = vita_db.supersede_node(
+            old_node_id=request["old_node_id"],
+            new_node_id=request["new_node_id"],
+            message_id=request.get("message_id")
+        )
+        
+        if success:
+            return {
+                "message": f"Successfully superseded node {request['old_node_id']} with node {request['new_node_id']}",
+                "old_node_id": request["old_node_id"],
+                "new_node_id": request["new_node_id"]
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to supersede knowledge node"
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to supersede knowledge: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to supersede knowledge: {str(e)}")
+
+# v5.1: Predictive Intelligence & Strategic Advisory Endpoints
+
+@app.post("/intelligence/downstream_risks")
+async def detect_downstream_risks(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Detect downstream risks from a source risk node.
+    
+    Args:
+        request: Dictionary with source_risk_node_id
+        
+    Returns:
+        List of downstream risk alerts
+    """
+    try:
+        if "source_risk_node_id" not in request:
+            raise HTTPException(
+                status_code=400,
+                detail="Missing required field: source_risk_node_id"
+            )
+        
+        from .analyzer import vita_analyzer
+        
+        alerts = await vita_analyzer.detect_downstream_risks(request["source_risk_node_id"])
+        
+        return {
+            "downstream_alerts": alerts,
+            "count": len(alerts),
+            "source_node_id": request["source_risk_node_id"],
+            "message": f"Generated {len(alerts)} downstream risk alerts"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to detect downstream risks: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to detect downstream risks: {str(e)}")
+
+@app.post("/intelligence/leadership_digest")
+async def generate_leadership_digest(
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Generate a comprehensive weekly leadership digest.
+    
+    Returns:
+        Leadership digest with key decisions, risks, and knowledge gaps
+    """
+    try:
+        from .analyzer import vita_analyzer
+        
+        digest = await vita_analyzer.generate_leadership_digest()
+        
+        if digest:
+            return {
+                "digest": digest,
+                "message": "Leadership digest generated successfully"
+            }
+        else:
+            return {
+                "message": "No significant signals found for leadership digest",
+                "digest": None
+            }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate leadership digest: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate leadership digest: {str(e)}")
+
+@app.post("/intelligence/knowledge_supersession")
+async def detect_knowledge_supersession(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Detect if new content supersedes existing knowledge.
+    
+    Args:
+        request: Dictionary with message_content and message_id
+        
+    Returns:
+        List of supersession actions taken
+    """
+    try:
+        required_fields = ["message_content", "message_id"]
+        missing_fields = [field for field in required_fields if field not in request]
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {missing_fields}"
+            )
+        
+        from .analyzer import vita_analyzer
+        
+        actions = await vita_analyzer.detect_knowledge_supersession(
+            request["message_content"],
+            request["message_id"]
+        )
+        
+        return {
+            "supersession_actions": actions,
+            "count": len(actions),
+            "message_id": request["message_id"],
+            "message": f"Detected {len(actions)} knowledge supersessions"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to detect knowledge supersession: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to detect knowledge supersession: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

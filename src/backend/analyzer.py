@@ -421,5 +421,429 @@ Write in a professional, executive summary style.
             logger.error(f"Failed to generate proactive briefing: {e}")
             return None
 
+    # v5.1: Knowledge Lifecycle Management Methods
+    
+    async def detect_knowledge_supersession(self, new_message_content: str, message_id: str) -> List[Dict[str, Any]]:
+        """
+        Detect if new content supersedes existing knowledge nodes.
+        
+        Args:
+            new_message_content: Content of the new message
+            message_id: ID of the message
+            
+        Returns:
+            List of supersession actions taken
+        """
+        try:
+            actions = []
+            
+            # Use LLM to detect potential supersessions  
+            supersession_prompt = f"""Analyze this new message content to identify if it supersedes or updates any existing decisions, policies, or procedures.
+
+New Content: {new_message_content}
+
+Instructions:
+1. Look for explicit language like "updated", "changed", "replaced", "supersedes", "new version"
+2. Identify what specific decision, policy, or procedure is being updated
+3. Determine if this is a complete replacement or partial update
+
+Format your response as JSON:
+{{
+    "has_supersession": true|false,
+    "superseded_items": [
+        {{
+            "type": "Decision|Policy|Procedure|Project",
+            "name": "Name of the item being superseded",
+            "confidence": 0.0-1.0,
+            "reason": "Why this is considered superseded"
+        }}
+    ]
+}}
+"""
+            
+            response = await llm_client.client.chat.completions.create(
+                model=llm_client.chat_model,
+                messages=[
+                    {"role": "system", "content": "You are an expert at detecting when new information supersedes existing knowledge."},
+                    {"role": "user", "content": supersession_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=500
+            )
+            
+            import json
+            result = json.loads(response.choices[0].message.content.strip())
+            
+            if result.get("has_supersession", False):
+                for item in result.get("superseded_items", []):
+                    # Find existing nodes that match
+                    existing_nodes = vita_db.get_active_nodes(
+                        label=item["type"], 
+                        name=item["name"]
+                    )
+                    
+                    for old_node in existing_nodes:
+                        # Create new node for the updated information
+                        new_node_id = vita_db.create_or_get_node(
+                            label=item["type"],
+                            name=f"{item['name']} (Updated)",
+                            metadata={"updated_from_message": message_id, "confidence": item["confidence"]}
+                        )
+                        
+                        # Supersede the old node
+                        success = vita_db.supersede_node(old_node.id, new_node_id, message_id)
+                        
+                        if success:
+                            actions.append({
+                                "action": "superseded",
+                                "old_node_id": old_node.id,
+                                "new_node_id": new_node_id,
+                                "item_type": item["type"],
+                                "item_name": item["name"],
+                                "confidence": item["confidence"],
+                                "reason": item["reason"]
+                            })
+                            
+                            logger.info(f"Superseded {item['type']} '{item['name']}' with confidence {item['confidence']}")
+            
+            return actions
+            
+        except Exception as e:
+            logger.error(f"Failed to detect knowledge supersession: {e}")
+            return []
+    
+    async def review_playbook_performance(self) -> Dict[str, Any]:
+        """
+        Review playbook and SOP performance based on user feedback.
+        
+        Returns:
+            Review summary with recommendations
+        """
+        try:
+            # Get playbook feedback summary from last 30 days
+            playbook_stats = vita_db.get_playbook_feedback_summary(30)
+            
+            flagged_playbooks = []
+            recommendations = []
+            
+            for playbook in playbook_stats:
+                total_usage = playbook['total_usage']
+                negative_feedback = playbook['negative_feedback']
+                positive_feedback = playbook['positive_feedback']
+                
+                if total_usage > 0:
+                    negative_rate = negative_feedback / total_usage
+                    
+                    # Flag playbooks with >50% negative feedback and at least 3 uses
+                    if negative_rate > 0.5 and total_usage >= 3:
+                        flagged_playbooks.append({
+                            **playbook,
+                            "negative_rate": negative_rate,
+                            "status": "needs_review"
+                        })
+                        
+                        recommendations.append({
+                            "type": "playbook_review",
+                            "playbook_name": playbook['name'],
+                            "issue": f"High negative feedback rate: {negative_rate:.1%}",
+                            "suggestion": "Review and update this playbook based on user feedback"
+                        })
+                    
+                    # Flag unused playbooks (no usage in 30 days) if they reference superseded nodes
+                    elif total_usage == 0:
+                        # Check if playbook references superseded nodes
+                        superseded_nodes = vita_db.get_superseded_nodes(30)
+                        for superseded_info in superseded_nodes:
+                            superseded_node = superseded_info[0]  # First element is the superseded node
+                            if superseded_node.id == playbook['node_id']:
+                                flagged_playbooks.append({
+                                    **playbook,
+                                    "status": "references_superseded"
+                                })
+                                
+                                recommendations.append({
+                                    "type": "playbook_obsolete",
+                                    "playbook_name": playbook['name'],
+                                    "issue": "References superseded knowledge",
+                                    "suggestion": "Archive or update this playbook"
+                                })
+            
+            review_summary = {
+                "review_date": datetime.utcnow().isoformat(),
+                "total_playbooks_reviewed": len(playbook_stats),
+                "flagged_playbooks": len(flagged_playbooks),
+                "recommendations": recommendations,
+                "flagged_details": flagged_playbooks
+            }
+            
+            logger.info(f"Playbook review completed: {len(flagged_playbooks)} playbooks flagged")
+            return review_summary
+            
+        except Exception as e:
+            logger.error(f"Failed to review playbook performance: {e}")
+            return {}
+
+    # v5.1: Predictive Intelligence & Strategic Advisory Methods
+    
+    async def detect_downstream_risks(self, source_risk_node_id: int) -> List[Dict[str, Any]]:
+        """
+        Detect downstream risks by traversing dependency relationships in the knowledge graph.
+        
+        Args:
+            source_risk_node_id: ID of the node where risk was detected
+            
+        Returns:
+            List of downstream impact alerts
+        """
+        try:
+            alerts = []
+            
+            # Get relationships where the risk node is the source of dependencies
+            edges = vita_db.query_graph("edges", source_id=source_risk_node_id)
+            
+            # Also get relationships where other nodes depend on this risk node
+            dependent_edges = vita_db.query_graph("edges", target_id=source_risk_node_id)
+            
+            # Process dependencies
+            all_edges = edges + [edge for edge in dependent_edges if edge.relationship == "depends_on"]
+            
+            for edge in all_edges:
+                if edge.relationship in ["depends_on", "affects", "impacts"]:
+                    # Get the dependent node
+                    dependent_node_id = edge.target_id if edge.source_id == source_risk_node_id else edge.source_id
+                    dependent_nodes = [node for node in vita_db.query_graph("nodes") if node.id == dependent_node_id]
+                    
+                    if dependent_nodes:
+                        dependent_node = dependent_nodes[0]
+                        
+                        # Generate contextualized alert
+                        alert = await self._generate_downstream_alert(
+                            source_risk_node_id, dependent_node, edge.relationship
+                        )
+                        
+                        if alert:
+                            alerts.append(alert)
+            
+            logger.info(f"Generated {len(alerts)} downstream risk alerts")
+            return alerts
+            
+        except Exception as e:
+            logger.error(f"Failed to detect downstream risks: {e}")
+            return []
+    
+    async def _generate_downstream_alert(self, source_node_id: int, dependent_node: Any, 
+                                       relationship: str) -> Optional[Dict[str, Any]]:
+        """
+        Generate a contextualized downstream alert.
+        
+        Args:
+            source_node_id: Source risk node ID
+            dependent_node: Dependent node object
+            relationship: Type of relationship
+            
+        Returns:
+            Alert dictionary
+        """
+        try:
+            # Get source node details
+            source_nodes = [node for node in vita_db.query_graph("nodes") if node.id == source_node_id]
+            if not source_nodes:
+                return None
+            
+            source_node = source_nodes[0]
+            
+            # Generate alert message
+            alert_prompt = f"""Generate a concise downstream risk alert.
+
+Source Issue: {source_node.label} "{source_node.name}" has detected risks
+Impacted Entity: {dependent_node.label} "{dependent_node.name}"
+Relationship: {relationship}
+
+Create a brief, professional alert message that:
+1. Explains the potential downstream impact
+2. Suggests what the impacted team should monitor
+3. Provides context without revealing sensitive details
+
+Format as a single paragraph, under 150 words.
+"""
+            
+            response = await llm_client.client.chat.completions.create(
+                model=llm_client.chat_model,
+                messages=[
+                    {"role": "system", "content": "You are a strategic risk analyst who creates clear, actionable alerts."},
+                    {"role": "user", "content": alert_prompt}
+                ],
+                temperature=0.2,
+                max_tokens=200
+            )
+            
+            alert_message = response.choices[0].message.content.strip()
+            
+            return {
+                "type": "downstream_risk",
+                "source_node_id": source_node_id,
+                "source_entity": f"{source_node.label}:{source_node.name}",
+                "impacted_node_id": dependent_node.id,
+                "impacted_entity": f"{dependent_node.label}:{dependent_node.name}",
+                "relationship": relationship,
+                "alert_message": alert_message,
+                "priority": "medium",
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to generate downstream alert: {e}")
+            return None
+    
+    async def generate_leadership_digest(self) -> Optional[Dict[str, Any]]:
+        """
+        Generate a comprehensive weekly leadership digest.
+        
+        Returns:
+            Leadership digest with key decisions, risks, and knowledge gaps
+        """
+        try:
+            logger.info("Generating weekly leadership digest")
+            
+            # Gather signals from multiple sources
+            signals = await self._gather_leadership_signals()
+            
+            if not any(signals.values()):
+                logger.info("No significant signals found for leadership digest")
+                return None
+            
+            # Generate structured digest using LLM
+            digest_content = await self._synthesize_leadership_digest(signals)
+            
+            digest = {
+                "title": "VITA Leadership Digest - Weekly Summary",
+                "generated_at": datetime.utcnow().isoformat(),
+                "time_period": f"Week of {(datetime.utcnow() - timedelta(days=7)).strftime('%Y-%m-%d')}",
+                "content": digest_content,
+                "signals_summary": {
+                    "new_decisions": len(signals["new_decisions"]),
+                    "new_risks": len(signals["new_risks"]),
+                    "knowledge_gaps": len(signals["knowledge_gaps"]),
+                    "flagged_playbooks": len(signals["flagged_playbooks"])
+                },
+                "raw_signals": signals
+            }
+            
+            logger.info("Generated leadership digest successfully")
+            return digest
+            
+        except Exception as e:
+            logger.error(f"Failed to generate leadership digest: {e}")
+            return None
+    
+    async def _gather_leadership_signals(self) -> Dict[str, List]:
+        """
+        Gather signals from across the VITA system for leadership digest.
+        
+        Returns:
+            Dictionary of categorized signals
+        """
+        try:
+            signals = {
+                "new_decisions": [],
+                "new_risks": [],
+                "knowledge_gaps": [],
+                "flagged_playbooks": []
+            }
+            
+            # Get new decision and risk nodes from the last week
+            recent_nodes = vita_db.query_graph("nodes")
+            week_ago = datetime.utcnow() - timedelta(days=7)
+            
+            for node in recent_nodes:
+                if node.created_at >= week_ago:
+                    if node.label == "Decision":
+                        signals["new_decisions"].append({
+                            "name": node.name,
+                            "created_at": node.created_at.isoformat(),
+                            "properties": node.properties
+                        })
+                    elif node.label == "Risk":
+                        signals["new_risks"].append({
+                            "name": node.name,
+                            "created_at": node.created_at.isoformat(),
+                            "properties": node.properties
+                        })
+            
+            # Get failed evidence chains (knowledge gaps)
+            failed_chains = vita_db.get_failed_evidence_chains(7)
+            for chain in failed_chains:
+                signals["knowledge_gaps"].append({
+                    "query": chain.user_query,
+                    "timestamp": chain.timestamp.isoformat(),
+                    "reasoning_plan": chain.reasoning_plan
+                })
+            
+            # Get flagged playbooks from performance review
+            playbook_review = await self.review_playbook_performance()
+            signals["flagged_playbooks"] = playbook_review.get("flagged_details", [])
+            
+            return signals
+            
+        except Exception as e:
+            logger.error(f"Failed to gather leadership signals: {e}")
+            return {"new_decisions": [], "new_risks": [], "knowledge_gaps": [], "flagged_playbooks": []}
+    
+    async def _synthesize_leadership_digest(self, signals: Dict[str, List]) -> str:
+        """
+        Synthesize leadership digest content using LLM.
+        
+        Args:
+            signals: Dictionary of gathered signals
+            
+        Returns:
+            Formatted digest content
+        """
+        try:
+            signals_text = f"""New Decisions ({len(signals['new_decisions'])} items):
+{chr(10).join([f"• {d['name']}" for d in signals['new_decisions'][:5]])}
+
+New Risks & Blockers ({len(signals['new_risks'])} items):
+{chr(10).join([f"• {r['name']}" for r in signals['new_risks'][:5]])}
+
+Knowledge Gaps ({len(signals['knowledge_gaps'])} items):
+{chr(10).join([f"• {g['query'][:100]}..." for g in signals['knowledge_gaps'][:3]])}
+
+Playbooks Needing Attention ({len(signals['flagged_playbooks'])} items):
+{chr(10).join([f"• {p['name']} - {p.get('status', 'unknown')}" for p in signals['flagged_playbooks'][:3]])}
+"""
+            
+            digest_prompt = f"""You are an AI Chief of Staff creating a weekly leadership digest. Based on the following data points from the past week, generate a concise executive summary.
+
+DATA POINTS:
+{signals_text}
+
+Instructions:
+1. Create three main sections: "Key Decisions Made", "New Risks & Blockers", "Knowledge That Needs Attention"
+2. Be brief, factual, and strategic
+3. Focus on actionable insights and implications
+4. Use executive-appropriate language
+5. Highlight patterns or trends if visible
+6. Maximum 400 words total
+
+Format with clear section headers and bullet points.
+"""
+            
+            response = await llm_client.client.chat.completions.create(
+                model=llm_client.chat_model,
+                messages=[
+                    {"role": "system", "content": "You are an expert executive assistant who creates insightful, concise leadership summaries."},
+                    {"role": "user", "content": digest_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=600
+            )
+            
+            return response.choices[0].message.content.strip()
+            
+        except Exception as e:
+            logger.error(f"Failed to synthesize leadership digest: {e}")
+            return "Unable to generate digest content due to processing error."
+
 # Global analyzer instance
 vita_analyzer = VitaAnalyzer() 

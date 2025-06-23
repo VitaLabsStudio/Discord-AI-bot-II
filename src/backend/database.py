@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, I
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import IntegrityError
+import uuid
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -40,19 +41,40 @@ class UserFeedback(Base):
     def __repr__(self):
         return f"<UserFeedback(id={self.id}, is_helpful={self.is_helpful}, user_id='{self.user_id}')>"
 
+class EvidenceChain(Base):
+    """Table for storing evidence chains for traceable reasoning."""
+    __tablename__ = "evidence_chains"
+    
+    chain_id = Column(String, primary_key=True, index=True)  # UUID
+    user_query = Column(Text, nullable=False)
+    reasoning_plan = Column(Text, nullable=True)  # JSON of LLM-generated plan
+    evidence_data = Column(Text, nullable=True)   # JSON blob with source message IDs, etc.
+    final_narrative = Column(Text, nullable=True)
+    was_successful = Column(Boolean, default=False, nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user_id = Column(String, nullable=True, index=True)
+    
+    def __repr__(self):
+        return f"<EvidenceChain(chain_id='{self.chain_id}', successful={self.was_successful})>"
+
 class GraphNode(Base):
-    """Table for storing knowledge graph entities."""
+    """Table for storing knowledge graph entities with lifecycle management."""
     __tablename__ = "graph_nodes"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     label = Column(String, nullable=False, index=True)  # e.g., "Project", "Person"
     name = Column(String, nullable=False, index=True)   # e.g., "Project Phoenix", "John Doe"
-    properties = Column(Text, nullable=True)            # JSON blob for extra info (renamed from metadata)
+    properties = Column(Text, nullable=True)            # JSON blob for extra info
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     
+    # v5.1 Lifecycle Management Fields
+    status = Column(String, default="active", nullable=False, index=True)  # active, superseded, archived
+    version = Column(Integer, default=1, nullable=False)
+    last_accessed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
     def __repr__(self):
-        return f"<GraphNode(id={self.id}, label='{self.label}', name='{self.name}')>"
+        return f"<GraphNode(id={self.id}, label='{self.label}', name='{self.name}', status='{self.status}')>"
 
 class GraphEdge(Base):
     """Table for storing knowledge graph relationships."""
@@ -61,13 +83,28 @@ class GraphEdge(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     source_id = Column(Integer, nullable=False, index=True)      # Foreign key to graph_nodes
     target_id = Column(Integer, nullable=False, index=True)      # Foreign key to graph_nodes
-    relationship = Column(String, nullable=False, index=True)    # e.g., "manages", "depends_on"
-    properties = Column(Text, nullable=True)                     # JSON blob for extra info (renamed from metadata)
+    relationship = Column(String, nullable=False, index=True)    # e.g., "manages", "depends_on", "supersedes"
+    properties = Column(Text, nullable=True)                     # JSON blob for extra info
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     message_id = Column(String, nullable=True, index=True)       # Track which message created this relationship
     
     def __repr__(self):
         return f"<GraphEdge(id={self.id}, source_id={self.source_id}, target_id={self.target_id}, relationship='{self.relationship}')>"
+
+class PlaybookUsage(Base):
+    """Table for tracking playbook and SOP usage with feedback correlation."""
+    __tablename__ = "playbook_usage"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    playbook_node_id = Column(Integer, nullable=False, index=True)  # Reference to graph_nodes
+    user_query = Column(Text, nullable=False)
+    user_id = Column(String, nullable=False, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    feedback_id = Column(Integer, nullable=True, index=True)  # Reference to user_feedback
+    was_helpful = Column(Boolean, nullable=True)  # Derived from feedback
+    
+    def __repr__(self):
+        return f"<PlaybookUsage(id={self.id}, playbook_node_id={self.playbook_node_id}, helpful={self.was_helpful})>"
 
 class ConversationHistory(Base):
     """Table for storing conversation context between users and VITA."""
@@ -486,6 +523,310 @@ class VitaDatabase:
                 logger.error(f"Failed to query graph: {e}")
                 return []
     
+    # Evidence Chain Methods (v5.1)
+    
+    def create_evidence_chain(self, user_query: str, user_id: str = None) -> str:
+        """
+        Create a new evidence chain for query traceability.
+        
+        Args:
+            user_query: The user's original query
+            user_id: Optional user ID
+            
+        Returns:
+            Chain ID (UUID)
+        """
+        with self.get_session() as session:
+            try:
+                chain_id = str(uuid.uuid4())
+                
+                evidence_chain = EvidenceChain(
+                    chain_id=chain_id,
+                    user_query=user_query,
+                    user_id=user_id
+                )
+                session.add(evidence_chain)
+                session.commit()
+                
+                logger.debug(f"Created evidence chain {chain_id} for query: {user_query[:50]}...")
+                return chain_id
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to create evidence chain: {e}")
+                raise
+    
+    def update_evidence_chain(self, chain_id: str, reasoning_plan: str = None, 
+                             evidence_data: dict = None, final_narrative: str = None, 
+                             was_successful: bool = None) -> bool:
+        """
+        Update an evidence chain with reasoning steps and results.
+        
+        Args:
+            chain_id: The chain ID to update
+            reasoning_plan: JSON string of the reasoning plan
+            evidence_data: Dictionary of evidence (will be JSON encoded)
+            final_narrative: The final answer provided
+            was_successful: Whether the chain was completed successfully
+            
+        Returns:
+            True if update was successful
+        """
+        with self.get_session() as session:
+            try:
+                chain = session.query(EvidenceChain).filter(
+                    EvidenceChain.chain_id == chain_id
+                ).first()
+                
+                if not chain:
+                    logger.warning(f"Evidence chain {chain_id} not found")
+                    return False
+                
+                if reasoning_plan is not None:
+                    chain.reasoning_plan = reasoning_plan
+                if evidence_data is not None:
+                    import json
+                    chain.evidence_data = json.dumps(evidence_data)
+                if final_narrative is not None:
+                    chain.final_narrative = final_narrative
+                if was_successful is not None:
+                    chain.was_successful = was_successful
+                
+                session.commit()
+                logger.debug(f"Updated evidence chain {chain_id}")
+                return True
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to update evidence chain {chain_id}: {e}")
+                return False
+    
+    def get_failed_evidence_chains(self, days: int = 7) -> list:
+        """
+        Get evidence chains that failed to resolve (knowledge gaps).
+        
+        Args:
+            days: Number of days to look back
+            
+        Returns:
+            List of failed evidence chains
+        """
+        with self.get_session() as session:
+            try:
+                cutoff_date = datetime.utcnow() - timedelta(days=days)
+                
+                failed_chains = session.query(EvidenceChain).filter(
+                    EvidenceChain.was_successful == False,
+                    EvidenceChain.timestamp >= cutoff_date
+                ).order_by(EvidenceChain.timestamp.desc()).all()
+                
+                return failed_chains
+                
+            except Exception as e:
+                logger.error(f"Failed to get failed evidence chains: {e}")
+                return []
+
+    # Enhanced Knowledge Graph Methods (v5.1)
+    
+    def supersede_node(self, old_node_id: int, new_node_id: int, message_id: str = None) -> bool:
+        """
+        Mark a node as superseded and create a supersedes relationship.
+        
+        Args:
+            old_node_id: ID of the node being superseded
+            new_node_id: ID of the new node that supersedes it
+            message_id: Optional message ID that triggered the supersession
+            
+        Returns:
+            True if successful
+        """
+        with self.get_session() as session:
+            try:
+                # Update old node status
+                old_node = session.query(GraphNode).filter(GraphNode.id == old_node_id).first()
+                if old_node:
+                    old_node.status = "superseded"
+                    old_node.updated_at = datetime.utcnow()
+                
+                # Create supersedes relationship
+                import json
+                edge = GraphEdge(
+                    source_id=new_node_id,
+                    target_id=old_node_id,
+                    relationship="supersedes",
+                    message_id=message_id,
+                    properties=json.dumps({"superseded_at": datetime.utcnow().isoformat()})
+                )
+                session.add(edge)
+                session.commit()
+                
+                logger.info(f"Node {old_node_id} superseded by node {new_node_id}")
+                return True
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to supersede node {old_node_id}: {e}")
+                return False
+    
+    def get_active_nodes(self, label: str = None, name: str = None) -> list:
+        """
+        Get active (non-superseded) nodes with optional filtering.
+        
+        Args:
+            label: Optional label filter
+            name: Optional name filter
+            
+        Returns:
+            List of active nodes
+        """
+        with self.get_session() as session:
+            try:
+                query = session.query(GraphNode).filter(GraphNode.status == "active")
+                
+                if label:
+                    query = query.filter(GraphNode.label == label)
+                if name:
+                    query = query.filter(GraphNode.name.ilike(f"%{name}%"))
+                
+                # Update last_accessed_at for returned nodes
+                nodes = query.all()
+                for node in nodes:
+                    node.last_accessed_at = datetime.utcnow()
+                
+                session.commit()
+                return nodes
+                
+            except Exception as e:
+                logger.error(f"Failed to get active nodes: {e}")
+                return []
+    
+    def get_superseded_nodes(self, days: int = 30) -> list:
+        """
+        Get nodes that were superseded in the last N days.
+        
+        Args:
+            days: Number of days to look back
+            
+        Returns:
+            List of superseded nodes with their superseding nodes
+        """
+        with self.get_session() as session:
+            try:
+                cutoff_date = datetime.utcnow() - timedelta(days=days)
+                
+                # Get superseded nodes and their superseding relationships
+                superseded_info = session.query(GraphNode, GraphEdge, GraphNode.alias()).join(
+                    GraphEdge, GraphNode.id == GraphEdge.target_id
+                ).join(
+                    GraphNode.alias(), GraphEdge.source_id == GraphNode.alias().id
+                ).filter(
+                    GraphNode.status == "superseded",
+                    GraphEdge.relationship == "supersedes",
+                    GraphNode.updated_at >= cutoff_date
+                ).all()
+                
+                return superseded_info
+                
+            except Exception as e:
+                logger.error(f"Failed to get superseded nodes: {e}")
+                return []
+
+    # Playbook Usage Tracking Methods (v5.1)
+    
+    def record_playbook_usage(self, playbook_node_id: int, user_query: str, 
+                             user_id: str, feedback_id: int = None) -> int:
+        """
+        Record usage of a playbook or SOP.
+        
+        Args:
+            playbook_node_id: ID of the playbook node in the knowledge graph
+            user_query: The user's query that used this playbook
+            user_id: User ID
+            feedback_id: Optional feedback ID to correlate with feedback
+            
+        Returns:
+            Usage record ID
+        """
+        with self.get_session() as session:
+            try:
+                usage = PlaybookUsage(
+                    playbook_node_id=playbook_node_id,
+                    user_query=user_query,
+                    user_id=user_id,
+                    feedback_id=feedback_id
+                )
+                session.add(usage)
+                session.commit()
+                session.refresh(usage)
+                
+                logger.debug(f"Recorded playbook usage for node {playbook_node_id}")
+                return usage.id
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to record playbook usage: {e}")
+                raise
+    
+    def get_playbook_feedback_summary(self, days: int = 30) -> list:
+        """
+        Get playbook usage feedback summary for review.
+        
+        Args:
+            days: Number of days to analyze
+            
+        Returns:
+            List of playbooks with their feedback statistics
+        """
+        with self.get_session() as session:
+            try:
+                cutoff_date = datetime.utcnow() - timedelta(days=days)
+                
+                # Get playbook usage with feedback correlation
+                playbook_stats = session.query(
+                    PlaybookUsage.playbook_node_id,
+                    GraphNode.name,
+                    GraphNode.label,
+                    session.query(UserFeedback.is_helpful).filter(
+                        UserFeedback.id == PlaybookUsage.feedback_id
+                    ).label('feedback_helpful')
+                ).join(
+                    GraphNode, PlaybookUsage.playbook_node_id == GraphNode.id
+                ).outerjoin(
+                    UserFeedback, PlaybookUsage.feedback_id == UserFeedback.id
+                ).filter(
+                    PlaybookUsage.timestamp >= cutoff_date
+                ).all()
+                
+                # Aggregate feedback by playbook
+                playbook_summary = {}
+                for stat in playbook_stats:
+                    node_id = stat.playbook_node_id
+                    if node_id not in playbook_summary:
+                        playbook_summary[node_id] = {
+                            'node_id': node_id,
+                            'name': stat.name,
+                            'label': stat.label,
+                            'total_usage': 0,
+                            'positive_feedback': 0,
+                            'negative_feedback': 0,
+                            'no_feedback': 0
+                        }
+                    
+                    playbook_summary[node_id]['total_usage'] += 1
+                    
+                    if stat.feedback_helpful is True:
+                        playbook_summary[node_id]['positive_feedback'] += 1
+                    elif stat.feedback_helpful is False:
+                        playbook_summary[node_id]['negative_feedback'] += 1
+                    else:
+                        playbook_summary[node_id]['no_feedback'] += 1
+                
+                return list(playbook_summary.values())
+                
+            except Exception as e:
+                logger.error(f"Failed to get playbook feedback summary: {e}")
+                return []
+
     # Conversation History Methods
     
     def save_conversation(self, user_id: str, query_text: str, answer_text: str):
