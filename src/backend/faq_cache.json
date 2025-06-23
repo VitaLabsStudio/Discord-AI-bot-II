@@ -1,0 +1,23 @@
+{
+  "exact_matches": {
+    "what is vita": "VITA is an AI-powered Discord bot that helps you find information from your server's conversation history. It uses advanced AI to understand your questions and search through all messages, documents, and files shared in your server.",
+    "what is vita?": "VITA is an AI-powered Discord bot that helps you find information from your server's conversation history. It uses advanced AI to understand your questions and search through all messages, documents, and files shared in your server.",
+    "who made vita": "VITA was created to help Discord communities better organize and access their collective knowledge.",
+    "who made vita?": "VITA was created to help Discord communities better organize and access their collective knowledge.",
+    "how does vita work": "VITA works by: 1) Analyzing all messages and files in your server, 2) Creating a searchable knowledge base, 3) Using AI to understand your questions and find relevant information, 4) Providing answers with citations so you can verify the sources.",
+    "how does vita work?": "VITA works by: 1) Analyzing all messages and files in your server, 2) Creating a searchable knowledge base, 3) Using AI to understand your questions and find relevant information, 4) Providing answers with citations so you can verify the sources.",
+    "help": "I'm VITA, your AI assistant! Use `/ask` followed by your question to search through your server's knowledge. I can help you find information from messages, documents, and files. For example: `/ask how do I set up the project?`",
+    "/help": "I'm VITA, your AI assistant! Use `/ask` followed by your question to search through your server's knowledge. I can help you find information from messages, documents, and files. For example: `/ask how do I set up the project?`"
+  },
+  "keyword_patterns": {
+    "commands": "Available commands:\n• `/ask <question>` - Ask me anything about your server's content\n• React with 🛑 to any of my responses to delete that information from my knowledge base\n• Give feedback with 👍 or 👎 on my answers to help me improve",
+    "privacy": "Privacy: I only access messages in channels where I have been explicitly added. You can delete your data anytime by reacting with 🛑 to my responses. All data is processed securely and used only to improve your experience.",
+    "delete": "To delete your data: React with 🛑 to any of my responses that contain information you want removed. I'll immediately delete that information from my knowledge base and confirm with a ✅ reaction.",
+    "feedback": "Provide feedback: Use 👍 if my answer was helpful or 👎 if it wasn't. Your feedback helps me learn and provide better answers in the future!"
+  },
+  "greeting_responses": [
+    "Hello! I'm VITA, your AI assistant. Ask me anything about your server's content using `/ask <your question>`",
+    "Hi there! I'm here to help you find information from your server. What would you like to know?",
+    "Greetings! I'm VITA. I can search through your server's messages and files to answer your questions."
+  ]
+} 

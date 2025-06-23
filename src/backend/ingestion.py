@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from .schemas import IngestRequest
-from .processed_log import processed_log
+from .database import vita_db
 from .file_processor import process_attachments
 from .embedding import embedding_manager
 from .permissions import permission_manager
@@ -22,16 +22,18 @@ def is_processed(message_id: str) -> bool:
     Returns:
         True if message has been processed
     """
-    return processed_log.is_processed(message_id)
+    return vita_db.is_message_processed(message_id)
 
-def mark_processed(message_id: str):
+def mark_processed(message_id: str, channel_id: str = None, user_id: str = None):
     """
     Mark a message as processed.
     
     Args:
         message_id: Discord message ID
+        channel_id: Optional channel ID
+        user_id: Optional user ID
     """
-    processed_log.mark_processed(message_id)
+    vita_db.mark_message_processed(message_id, channel_id, user_id)
 
 async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None, channel_name: Optional[str] = None):
     """
@@ -104,7 +106,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
                     log_details, channel_name
                 )
             
-            mark_processed(req.message_id)
+            mark_processed(req.message_id, req.channel_id, req.user_id)
             return
         
         # Combine all content
@@ -124,7 +126,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
                     log_details, channel_name
                 )
             
-            mark_processed(req.message_id)
+            mark_processed(req.message_id, req.channel_id, req.user_id)
             return
         
         log_details.append(f"Split into {len(chunks)} chunks for embedding")
@@ -208,7 +210,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             return
         
         # Mark as processed
-        mark_processed(req.message_id)
+        mark_processed(req.message_id, req.channel_id, req.user_id)
         log_details.append("Successfully marked as processed")
         
         # Update progress tracker

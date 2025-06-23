@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from .logger import get_logger
+from .retry_utils import retry_on_api_error
 
 # Load environment variables
 load_dotenv()
@@ -18,9 +19,10 @@ class LLMClient:
         )
         self.chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
     
+    @retry_on_api_error(max_attempts=3, min_wait=1.0, max_wait=30.0)
     async def generate_answer(self, question: str, context_documents: List[Dict], user_id: str = None) -> Dict[str, Any]:
         """
-        Generate an answer using the RAG pipeline.
+        Generate an answer using the RAG pipeline with retry logic.
         
         Args:
             question: User's question

@@ -63,6 +63,62 @@ class VitaDiscordBot(commands.Bot):
         logger.info(f"Bot is ready! Logged in as {self.user}")
         logger.info(f"Connected to {len(self.guilds)} guilds")
     
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        """Handle reaction-based message deletion."""
+        try:
+            # Only handle 🛑 (stop sign) emoji
+            if str(payload.emoji) != "🛑":
+                return
+            
+            # Skip bot reactions
+            if payload.user_id == self.user.id:
+                return
+            
+            # Get the message and user
+            channel = self.get_channel(payload.channel_id)
+            if not channel:
+                return
+            
+            message = await channel.fetch_message(payload.message_id)
+            user = self.get_user(payload.user_id)
+            
+            # Check if the user reacting is the original message author or an admin
+            is_author = str(message.author.id) == str(payload.user_id)
+            is_admin = False
+            
+            if hasattr(user, 'guild_permissions') and user.guild_permissions:
+                is_admin = user.guild_permissions.administrator
+            elif payload.guild_id:
+                guild = self.get_guild(payload.guild_id)
+                if guild:
+                    member = guild.get_member(payload.user_id)
+                    if member and member.guild_permissions.administrator:
+                        is_admin = True
+            
+            if not (is_author or is_admin):
+                logger.info(f"User {payload.user_id} tried to delete message {payload.message_id} but lacks permission")
+                return
+            
+            # Send delete request to backend
+            response = await self._send_to_backend(f"/delete_message/{message.id}", method="DELETE")
+            
+            if response:
+                # Add confirmation reaction
+                await message.add_reaction("✅")
+                logger.info(f"Message {message.id} vectors deleted by user {payload.user_id}")
+            else:
+                # Add error reaction
+                await message.add_reaction("❌")
+                logger.error(f"Failed to delete vectors for message {message.id}")
+        
+        except Exception as e:
+            logger.error(f"Error handling reaction deletion: {e}")
+    
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        """Handle reaction removal (cleanup only)."""
+        # Currently no action needed for reaction removal
+        pass
+    
     async def on_message(self, message: discord.Message):
         """Handle incoming messages for ingestion."""
         # Skip bot messages
@@ -134,7 +190,7 @@ class VitaDiscordBot(commands.Bot):
             endpoint: API endpoint
             data: Data to send (for POST requests)
             max_retries: Maximum number of retry attempts
-            method: HTTP method ("POST" or "GET")
+            method: HTTP method ("POST", "GET", or "DELETE")
             
         Returns:
             Response data or None if failed
@@ -157,6 +213,21 @@ class VitaDiscordBot(commands.Bot):
                             continue
                         else:
                             logger.error(f"Backend GET request failed: {response.status} - {await response.text()}")
+                            return None
+                elif method.upper() == "DELETE":
+                    async with self.session.delete(url) as response:
+                        if response.status in [200, 202, 204]:
+                            try:
+                                return await response.json()
+                            except:
+                                # DELETE might not return JSON content
+                                return {"status": "success"}
+                        elif response.status == 500 and attempt < max_retries:
+                            logger.warning(f"Backend server error (attempt {attempt + 1}/{max_retries + 1}), retrying...")
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        else:
+                            logger.error(f"Backend DELETE request failed: {response.status} - {await response.text()}")
                             return None
                 else:  # POST
                     async with self.session.post(url, json=data) as response:
@@ -189,6 +260,87 @@ class VitaDiscordBot(commands.Bot):
                     return None
         
         return None
+
+class FeedbackView(discord.ui.View):
+    """UI View for collecting feedback on AI responses."""
+    
+    def __init__(self, bot: VitaDiscordBot, query_text: str, answer_text: str, user_id: str, confidence: float):
+        super().__init__(timeout=300)  # 5 minute timeout
+        self.bot = bot
+        self.query_text = query_text
+        self.answer_text = answer_text
+        self.user_id = user_id
+        self.confidence = confidence
+        self.feedback_given = False
+    
+    @discord.ui.button(label="Helpful", emoji="👍", style=discord.ButtonStyle.green)
+    async def helpful_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle helpful feedback."""
+        if interaction.user.id != int(self.user_id):
+            await interaction.response.send_message("❌ You can only give feedback on your own queries.", ephemeral=True)
+            return
+        
+        if self.feedback_given:
+            await interaction.response.send_message("✅ Feedback already recorded!", ephemeral=True)
+            return
+        
+        await self._record_feedback(interaction, True)
+    
+    @discord.ui.button(label="Not Helpful", emoji="👎", style=discord.ButtonStyle.red)
+    async def not_helpful_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Handle not helpful feedback."""
+        if interaction.user.id != int(self.user_id):
+            await interaction.response.send_message("❌ You can only give feedback on your own queries.", ephemeral=True)
+            return
+        
+        if self.feedback_given:
+            await interaction.response.send_message("✅ Feedback already recorded!", ephemeral=True)
+            return
+        
+        await self._record_feedback(interaction, False)
+    
+    async def _record_feedback(self, interaction: discord.Interaction, is_helpful: bool):
+        """Record feedback in the backend."""
+        try:
+            feedback_data = {
+                "query_text": self.query_text,
+                "answer_text": self.answer_text,
+                "is_helpful": is_helpful,
+                "user_id": self.user_id,
+                "confidence_score": self.confidence
+            }
+            
+            response = await self.bot._send_to_backend("/feedback", feedback_data)
+            
+            if response:
+                # Disable all buttons
+                for item in self.children:
+                    item.disabled = True
+                self.feedback_given = True
+                
+                # Update the original message to show feedback was recorded
+                embed = interaction.message.embeds[0] if interaction.message.embeds else None
+                if embed:
+                    embed.add_field(
+                        name="📝 Feedback",
+                        value=f"Thank you! Your feedback has been recorded. {'👍' if is_helpful else '👎'}",
+                        inline=False
+                    )
+                
+                await interaction.response.edit_message(embed=embed, view=self)
+                logger.info(f"Recorded {'helpful' if is_helpful else 'not helpful'} feedback from user {self.user_id}")
+            else:
+                await interaction.response.send_message("❌ Failed to record feedback. Please try again later.", ephemeral=True)
+                
+        except Exception as e:
+            logger.error(f"Error recording feedback: {e}")
+            await interaction.response.send_message("❌ Error recording feedback. Please try again later.", ephemeral=True)
+    
+    async def on_timeout(self):
+        """Handle view timeout."""
+        for item in self.children:
+            item.disabled = True
+        # Note: We can't edit the message here without storing the interaction/message reference
 
 # Slash Commands
 @discord.app_commands.describe(
@@ -262,7 +414,23 @@ async def ask_command(interaction: discord.Interaction, question: str):
             if citation_text:
                 embed.add_field(name="📚 Sources", value=citation_text, inline=False)
         
-        await interaction.followup.send(embed=embed)
+        # Add feedback instructions
+        embed.add_field(
+            name="💡 Help me improve!",
+            value="Use the buttons below to rate this answer, or react with 🛑 to remove any of your messages from my knowledge base.",
+            inline=False
+        )
+        
+        # Create feedback view
+        feedback_view = FeedbackView(
+            bot=bot,
+            query_text=question,
+            answer_text=answer,
+            user_id=str(interaction.user.id),
+            confidence=confidence
+        )
+        
+        await interaction.followup.send(embed=embed, view=feedback_view)
         
     except Exception as e:
         logger.error(f"Failed to process ask command: {e}")

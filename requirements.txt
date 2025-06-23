@@ -9,6 +9,10 @@ pytesseract==0.3.10
 multiprocessing-logging==0.3.1
 filelock==3.16.1
 
+# Database & Retry Logic
+sqlalchemy==2.0.35
+tenacity==8.2.3
+
 # AI & Data Processing
 openai==1.90.0
 pinecone-client==4.1.1

@@ -4,7 +4,9 @@ from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Header
 from fastapi.security import HTTPBearer
 from dotenv import load_dotenv
 from .schemas import IngestRequest, QueryRequest, QueryResponse, BatchIngestRequest, ProgressResponse
-from .ingestion import run_ingestion_task, run_batch_ingestion_task, is_processed
+from .ingestion import run_ingestion_task, run_batch_ingestion_task
+from .database import vita_db, is_processed
+from .query_router import query_router
 from .embedding import embedding_manager
 from .permissions import permission_manager
 from .llm_client import llm_client
@@ -227,7 +229,7 @@ async def query_knowledge(
     _: bool = Depends(verify_api_key)
 ):
     """
-    Query the knowledge base using RAG pipeline.
+    Query the knowledge base using enhanced RAG pipeline with query routing.
     
     Args:
         request: QueryRequest with user question and context
@@ -237,6 +239,21 @@ async def query_knowledge(
     """
     try:
         logger.info(f"Processing query from user {request.user_id}")
+        
+        # First, try to route the query to FAQ cache
+        routed_response = query_router.route_query(request.question, request.user_id)
+        if routed_response:
+            # Return cached response immediately
+            response = QueryResponse(
+                answer=routed_response["answer"],
+                citations=routed_response["citations"],
+                confidence=routed_response["confidence"]
+            )
+            logger.info(f"Query answered by router ({routed_response['source']})")
+            return response
+        
+        # If not routed, proceed with full AI pipeline
+        logger.info(f"Query routed to AI pipeline for user {request.user_id}")
         
         # Create permission filter
         permission_filter = permission_manager.create_permission_filter(
@@ -285,19 +302,111 @@ async def query_knowledge(
         logger.error(f"Failed to process query: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process query: {str(e)}")
 
+@app.post("/feedback")
+async def record_feedback(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Record user feedback on AI responses.
+    
+    Args:
+        request: Dictionary with feedback data
+        
+    Returns:
+        Success confirmation
+    """
+    try:
+        required_fields = ["query_text", "answer_text", "is_helpful", "user_id"]
+        missing_fields = [field for field in required_fields if field not in request]
+        
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Missing required fields: {missing_fields}"
+            )
+        
+        feedback_id = vita_db.record_user_feedback(
+            query_text=request["query_text"],
+            answer_text=request["answer_text"],
+            is_helpful=request["is_helpful"],
+            user_id=request["user_id"],
+            confidence_score=request.get("confidence_score")
+        )
+        
+        return {
+            "message": "Feedback recorded successfully",
+            "feedback_id": feedback_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to record feedback: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to record feedback: {str(e)}")
+
+@app.delete("/delete_message/{message_id}")
+async def delete_message_vectors(
+    message_id: str,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Delete all vectors associated with a message ID from Pinecone.
+    
+    Args:
+        message_id: Discord message ID
+        
+    Returns:
+        Success confirmation
+    """
+    try:
+        # Query for vectors with this message_id
+        query_response = embedding_manager.index.query(
+            vector=[0.0] * 1536,  # Dummy vector
+            top_k=10000,  # Large number to get all matches
+            include_metadata=True,
+            filter={"message_id": message_id}
+        )
+        
+        if not query_response.matches:
+            return {
+                "message": f"No vectors found for message {message_id}",
+                "deleted_count": 0
+            }
+        
+        # Extract vector IDs to delete
+        vector_ids = [match.id for match in query_response.matches]
+        
+        # Delete vectors from Pinecone
+        embedding_manager.index.delete(ids=vector_ids)
+        
+        logger.info(f"Deleted {len(vector_ids)} vectors for message {message_id}")
+        
+        return {
+            "message": f"Successfully deleted vectors for message {message_id}",
+            "deleted_count": len(vector_ids)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to delete vectors for message {message_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete vectors: {str(e)}")
+
 @app.get("/stats")
 async def get_stats(_: bool = Depends(verify_api_key)):
     """
-    Get system statistics.
+    Get enhanced system statistics including feedback data.
     
     Returns:
         System statistics
     """
     try:
-        from .processed_log import processed_log
+        feedback_stats = vita_db.get_feedback_stats()
+        faq_stats = query_router.get_stats()
         
         stats = {
-            "processed_messages": processed_log.get_processed_count(),
+            "processed_messages": vita_db.get_processed_count(),
+            "feedback": feedback_stats,
+            "faq_cache": faq_stats,
             "system_status": "operational"
         }
         

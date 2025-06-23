@@ -7,6 +7,7 @@ from pinecone import Pinecone, ServerlessSpec
 from dotenv import load_dotenv
 from .logger import get_logger
 from .utils import sanitize_metadata
+from .retry_utils import retry_on_api_error
 
 # Load environment variables
 load_dotenv()
@@ -56,9 +57,10 @@ class EmbeddingManager:
             logger.error(f"Failed to initialize Pinecone index: {e}")
             raise
     
+    @retry_on_api_error(max_attempts=3, min_wait=1.0, max_wait=30.0)
     async def embed_chunks(self, chunks: List[str]) -> List[List[float]]:
         """
-        Generate embeddings for text chunks using OpenAI.
+        Generate embeddings for text chunks using OpenAI with retry logic.
         
         Args:
             chunks: List of text chunks to embed
