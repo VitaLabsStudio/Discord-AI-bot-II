@@ -1,0 +1,119 @@
+# VITA Company Ontology - Defines core business concepts for AI understanding
+# This file can be edited by non-developers to customize business vocabulary
+
+concepts:
+  - name: Project
+    description: "Organized efforts with specific goals and timelines"
+    examples: ["Project Phoenix", "VITA Bot v4", "Website Redesign", "Q4 Initiative", "Product Launch"]
+    keywords: ["project", "initiative", "effort", "milestone", "roadmap"]
+  
+  - name: Product
+    description: "Deliverable items or services offered to customers"
+    examples: ["Hangover Patch", "AI Assistant", "Data Subscription", "Mobile App", "API Service"]
+    keywords: ["product", "service", "offering", "solution", "feature"]
+  
+  - name: Department
+    description: "Organizational divisions within the company"
+    examples: ["Engineering", "Marketing", "Sales", "Executive", "Operations", "Finance", "HR"]
+    keywords: ["department", "team", "division", "unit", "group"]
+  
+  - name: Person
+    description: "Individuals within or associated with the company"
+    examples: ["John Doe", "CEO", "Project Manager", "Lead Developer", "Client"]
+    keywords: ["person", "employee", "manager", "lead", "director", "coordinator"]
+  
+  - name: Decision
+    description: "Formal choices or determinations made by leadership"
+    keywords: ["decision:", "final call:", "we will proceed with", "approved", "decided", "confirmed", "go/no-go", "greenlit"]
+    importance: "high"
+  
+  - name: Risk
+    description: "Potential issues or blockers that could impact success"
+    keywords: ["risk:", "blocker:", "concern:", "potential issue", "problem", "challenge", "threat", "vulnerability"]
+    importance: "high"
+  
+  - name: Meeting
+    description: "Scheduled gatherings for discussion and decision-making"
+    examples: ["Daily Standup", "Board Meeting", "Strategy Session", "Retrospective", "All-Hands"]
+    keywords: ["meeting", "session", "call", "conference", "standup", "sync"]
+  
+  - name: Deadline
+    description: "Time-sensitive commitments and milestones"
+    keywords: ["deadline", "due date", "milestone", "delivery", "launch date", "target", "ETA"]
+    importance: "high"
+  
+  - name: Client
+    description: "External customers or stakeholders"
+    examples: ["Enterprise Client", "Strategic Partner", "Vendor", "Supplier"]
+    keywords: ["client", "customer", "partner", "stakeholder", "vendor"]
+  
+  - name: Technology
+    description: "Technical systems, tools, and platforms used"
+    examples: ["Discord API", "Pinecone", "OpenAI", "SQLite", "Python", "FastAPI"]
+    keywords: ["technology", "tool", "platform", "system", "API", "framework", "database"]
+
+relationships:
+  # Define common relationship types that can exist between concepts
+  - type: "manages"
+    description: "Person manages Project/Department"
+    source_concepts: ["Person"]
+    target_concepts: ["Project", "Department", "Person"]
+  
+  - type: "works_on"
+    description: "Person works on Project/Product"
+    source_concepts: ["Person", "Department"]
+    target_concepts: ["Project", "Product"]
+  
+  - type: "depends_on"
+    description: "Project/Product depends on another Project/Product/Person"
+    source_concepts: ["Project", "Product"]
+    target_concepts: ["Project", "Product", "Person", "Technology"]
+  
+  - type: "decided_by"
+    description: "Decision made by Person/Meeting"
+    source_concepts: ["Decision"]
+    target_concepts: ["Person", "Meeting"]
+  
+  - type: "affects"
+    description: "Decision/Risk affects Project/Product/Person"
+    source_concepts: ["Decision", "Risk"]
+    target_concepts: ["Project", "Product", "Person", "Department"]
+  
+  - type: "participates_in"
+    description: "Person participates in Meeting/Project"
+    source_concepts: ["Person"]
+    target_concepts: ["Meeting", "Project"]
+  
+  - type: "assigned_to"
+    description: "Task/Risk assigned to Person/Department"
+    source_concepts: ["Project", "Risk"]
+    target_concepts: ["Person", "Department"]
+
+# Configuration for proactive notifications
+notifications:
+  channels:
+    announcements: "general"  # Channel for company-wide announcements
+    decisions: "leadership"   # Channel for decision notifications
+    risks: "alerts"          # Channel for risk notifications
+    projects: "project-updates"  # Channel for project updates
+  
+  roles:
+    executives: ["CEO", "CTO", "VP", "Director"]
+    managers: ["Project Manager", "Team Lead", "Manager"]
+    engineers: ["Engineer", "Developer", "Technical Lead"]
+  
+  triggers:
+    - concept: "Decision"
+      importance: "high"
+      notify_channels: ["announcements", "decisions"]
+      notify_roles: ["executives", "managers"]
+    
+    - concept: "Risk"
+      importance: "high"
+      notify_channels: ["risks"]
+      notify_roles: ["executives", "managers"]
+    
+    - concept: "Deadline"
+      importance: "high"
+      notify_channels: ["projects"]
+      notify_roles: ["managers", "engineers"] 

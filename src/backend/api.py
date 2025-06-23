@@ -268,11 +268,12 @@ async def query_knowledge(
             filter_dict=permission_filter
         )
         
-        # Generate answer using LLM
+        # Generate answer using enhanced LLM with role adaptation
         llm_result = await llm_client.generate_answer(
-            request.question,
-            similar_docs,
-            request.user_id
+            question=request.question,
+            context_documents=similar_docs,
+            user_id=request.user_id,
+            user_roles=request.roles
         )
         
         # Create citations from source documents
@@ -391,10 +392,155 @@ async def delete_message_vectors(
         logger.error(f"Failed to delete vectors for message {message_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete vectors: {str(e)}")
 
+@app.post("/digest")
+async def generate_digest(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Generate a thematic digest for the specified time period.
+    
+    Args:
+        request: Dictionary with 'days' parameter (optional, default: 7)
+        
+    Returns:
+        Thematic digest with key themes and summaries
+    """
+    try:
+        from .analyzer import vita_analyzer
+        
+        days = request.get("days", 7)
+        
+        # Validate days parameter
+        if not isinstance(days, int) or days < 1 or days > 30:
+            raise HTTPException(
+                status_code=400,
+                detail="Days parameter must be an integer between 1 and 30"
+            )
+        
+        digest = await vita_analyzer.generate_thematic_digest(days)
+        
+        return {
+            "digest": digest,
+            "message": f"Generated thematic digest for last {days} days"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to generate digest: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate digest: {str(e)}")
+
+@app.get("/graph/query")
+async def query_knowledge_graph(
+    query_type: str,
+    label: str = None,
+    name: str = None,
+    relationship: str = None,
+    node_id: int = None,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Query the knowledge graph.
+    
+    Args:
+        query_type: Type of query ("nodes", "edges", "relationships")
+        label: Optional node label filter
+        name: Optional node name filter  
+        relationship: Optional relationship type filter
+        node_id: Optional node ID for relationship queries
+        
+    Returns:
+        Query results from the knowledge graph
+    """
+    try:
+        if query_type not in ["nodes", "edges", "relationships"]:
+            raise HTTPException(
+                status_code=400,
+                detail="query_type must be 'nodes', 'edges', or 'relationships'"
+            )
+        
+        # Build query parameters
+        query_params = {}
+        if label:
+            query_params["label"] = label
+        if name:
+            query_params["name"] = name
+        if relationship:
+            query_params["relationship"] = relationship
+        if node_id:
+            query_params["node_id"] = node_id
+        
+        results = vita_db.query_graph(query_type, **query_params)
+        
+        # Convert results to dictionaries for JSON response
+        if query_type == "relationships" and isinstance(results, dict):
+            # Special handling for relationship queries
+            response_data = {
+                "outgoing": [{"edge": edge.__dict__, "node": node.__dict__} for edge, node in results.get("outgoing", [])],
+                "incoming": [{"edge": edge.__dict__, "node": node.__dict__} for edge, node in results.get("incoming", [])]
+            }
+        else:
+            # Standard list of objects
+            response_data = [item.__dict__ for item in results]
+        
+        return {
+            "results": response_data,
+            "count": len(response_data) if isinstance(response_data, list) else sum(len(v) for v in response_data.values()),
+            "query_type": query_type,
+            "parameters": query_params
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to query knowledge graph: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to query knowledge graph: {str(e)}")
+
+@app.get("/digests/recent")
+async def get_recent_digests(
+    limit: int = 10,
+    _: bool = Depends(verify_api_key)
+):
+    """
+    Get recent thematic digests.
+    
+    Args:
+        limit: Number of digests to retrieve (max 50)
+        
+    Returns:
+        List of recent digests
+    """
+    try:
+        if limit < 1 or limit > 50:
+            limit = min(max(limit, 1), 50)
+        
+        digests = vita_db.get_recent_digests(limit)
+        
+        # Convert to dictionaries for JSON response
+        digests_data = []
+        for digest in digests:
+            digest_dict = digest.__dict__.copy()
+            # Parse cluster_info JSON if present
+            if digest_dict.get('cluster_info'):
+                import json
+                try:
+                    digest_dict['cluster_info'] = json.loads(digest_dict['cluster_info'])
+                except json.JSONDecodeError:
+                    pass
+            digests_data.append(digest_dict)
+        
+        return {
+            "digests": digests_data,
+            "count": len(digests_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get recent digests: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get recent digests: {str(e)}")
+
 @app.get("/stats")
 async def get_stats(_: bool = Depends(verify_api_key)):
     """
-    Get enhanced system statistics including feedback data.
+    Get enhanced system statistics including feedback data and knowledge graph metrics.
     
     Returns:
         System statistics
@@ -403,10 +549,26 @@ async def get_stats(_: bool = Depends(verify_api_key)):
         feedback_stats = vita_db.get_feedback_stats()
         faq_stats = query_router.get_stats()
         
+        # Get knowledge graph statistics
+        total_nodes = len(vita_db.query_graph("nodes"))
+        total_edges = len(vita_db.query_graph("edges"))
+        
+        # Get concept distribution
+        concept_counts = {}
+        from .ontology import ontology_manager
+        for concept_name in ontology_manager.get_concept_names():
+            nodes = vita_db.query_graph("nodes", label=concept_name)
+            concept_counts[concept_name] = len(nodes)
+        
         stats = {
             "processed_messages": vita_db.get_processed_count(),
             "feedback": feedback_stats,
             "faq_cache": faq_stats,
+            "knowledge_graph": {
+                "total_nodes": total_nodes,
+                "total_edges": total_edges,
+                "concept_distribution": concept_counts
+            },
             "system_status": "operational"
         }
         

@@ -1,0 +1,257 @@
+[2025-06-23 14:10:03,410] [INFO] [__main__] - Starting VITA Discord AI Knowledge Assistant
+[2025-06-23 14:10:03,410] [INFO] [__main__] - Press Ctrl+C to stop the application
+[2025-06-23 14:10:03,433] [INFO] [__main__] - Both processes started successfully
+[2025-06-23 14:10:03,435] [INFO] [__main__] - Backend PID: 65832
+[2025-06-23 14:10:03,435] [INFO] [__main__] - Bot PID: 65833
+[2025-06-23 14:10:03,436] [INFO] [__main__] - Backend available at: http://localhost:8000
+[2025-06-23 14:10:03,436] [INFO] [__main__] - Backend health check: http://localhost:8000/health
+[2025-06-23 14:10:03,994] [INFO] [__mp_main__] - Starting Discord bot
+[2025-06-23 14:10:03,995] [INFO] [src.bot.discord_bot] - Starting Discord bot...
+[2025-06-23 14:10:04,418] [INFO] [src.backend.processed_log] - Loaded 520 processed messages
+[2025-06-23 14:10:04,995] [INFO] [src.bot.discord_bot] - Synced 2 command(s)
+[2025-06-23 14:10:07,370] [INFO] [src.bot.discord_bot] - Bot is ready! Logged in as Vita's AI Bot#9728
+[2025-06-23 14:10:07,371] [INFO] [src.bot.discord_bot] - Connected to 1 guilds
+[2025-06-23 14:10:11,647] [INFO] [src.backend.embedding] - Connected to Pinecone index: curoseoaiembed
+[2025-06-23 14:10:11,682] [INFO] [__mp_main__] - Starting FastAPI backend on 0.0.0.0:8000
+INFO:     Started server process [65832]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60533 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60537 - "POST /batch_ingest HTTP/1.1" 401 Unauthorized
+[2025-06-23 14:10:47,656] [INFO] [src.backend.progress_tracker] - Created batch ee0b1850-0ca8-4695-8675-8ffb6afbed9f for 1 messages
+[2025-06-23 14:10:47,656] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: ee0b1850-0ca8-4695-8675-8ffb6afbed9f
+INFO:     127.0.0.1:60541 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:10:47,657] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:10:47,657] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:10:47,657] [INFO] [src.backend.ingestion] - Starting ingestion for message test123
+[2025-06-23 14:10:47,659] [INFO] [src.backend.ingestion] - Message test123: Combined and cleaned content length: 70
+[2025-06-23 14:10:47,659] [INFO] [src.backend.ingestion] - Message test123: Split into 1 chunks for embedding.
+[2025-06-23 14:10:47,659] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:10:48,615] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:10:48,615] [INFO] [src.backend.ingestion] - Message test123: Generated 1 embedding vectors.
+[2025-06-23 14:10:48,616] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:10:49,305] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:10:49,305] [INFO] [src.backend.ingestion] - Message test123: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:10:49,310] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test123
+[2025-06-23 14:10:49,310] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:10:49,310] [INFO] [src.backend.progress_tracker] - Batch ee0b1850-0ca8-4695-8675-8ffb6afbed9f completed with status: COMPLETED
+INFO:     127.0.0.1:60556 - "GET /progress/ee0b1850-0ca8-4695-8675-8ffb6afbed9f HTTP/1.1" 200 OK
+[2025-06-23 14:13:28,437] [INFO] [src.backend.progress_tracker] - Created batch 2895e056-f4f4-406d-9901-8168aaa82227 for 1 messages
+[2025-06-23 14:13:28,438] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 2895e056-f4f4-406d-9901-8168aaa82227
+INFO:     127.0.0.1:60576 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:13:28,441] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:13:28,442] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:13:28,443] [INFO] [src.backend.ingestion] - Starting ingestion for message test_doc_456
+[2025-06-23 14:13:28,444] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_doc_456
+[2025-06-23 14:13:28,448] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:13:28,648] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370222569638330510/1370859141244911697/VITA_EU_Market_Entry_Strategy.docx?ex=685a60d0&is=68590f50&hm=60261fcbc852e1de14d83fc301a107689ff920fef71567a558f486637651af08&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:13:28,651] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:13:28,652] [INFO] [src.backend.ingestion] - Message test_doc_456: Combined and cleaned content length: 39
+[2025-06-23 14:13:28,652] [INFO] [src.backend.ingestion] - Message test_doc_456: Split into 1 chunks for embedding.
+[2025-06-23 14:13:28,652] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:13:29,331] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:13:29,332] [INFO] [src.backend.ingestion] - Message test_doc_456: Generated 1 embedding vectors.
+[2025-06-23 14:13:29,332] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:13:30,035] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:13:30,036] [INFO] [src.backend.ingestion] - Message test_doc_456: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:13:30,038] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_doc_456
+[2025-06-23 14:13:30,038] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:13:30,038] [INFO] [src.backend.progress_tracker] - Batch 2895e056-f4f4-406d-9901-8168aaa82227 completed with status: COMPLETED
+INFO:     127.0.0.1:60591 - "GET /progress/2895e056-f4f4-406d-9901-8168aaa82227 HTTP/1.1" 200 OK
+[2025-06-23 14:14:18,112] [INFO] [src.backend.progress_tracker] - Created batch 0af63112-1c6a-4ac4-a0eb-65d82e426278 for 1 messages
+[2025-06-23 14:14:18,113] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 0af63112-1c6a-4ac4-a0eb-65d82e426278
+INFO:     127.0.0.1:60597 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:14:18,113] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:14:18,113] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:14:18,113] [INFO] [src.backend.ingestion] - Starting ingestion for message test_doc_789
+[2025-06-23 14:14:18,114] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_doc_789
+[2025-06-23 14:14:18,114] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:14:18,216] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370222569638330510/1370858791553466508/VITA_US_Market_Entry_Strategy.docx?ex=685a607d&is=68590efd&hm=667ac7b89d37717a1d3c1de95ffa3d4e45526fe2ad0b07a06b1043be04965609&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:14:18,218] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:14:18,218] [INFO] [src.backend.ingestion] - Message test_doc_789: Combined and cleaned content length: 38
+[2025-06-23 14:14:18,219] [INFO] [src.backend.ingestion] - Message test_doc_789: Split into 1 chunks for embedding.
+[2025-06-23 14:14:18,219] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:14:18,625] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:14:18,625] [INFO] [src.backend.ingestion] - Message test_doc_789: Generated 1 embedding vectors.
+[2025-06-23 14:14:18,625] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:14:18,816] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:14:18,816] [INFO] [src.backend.ingestion] - Message test_doc_789: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:14:18,819] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_doc_789
+[2025-06-23 14:14:18,819] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:14:18,819] [INFO] [src.backend.progress_tracker] - Batch 0af63112-1c6a-4ac4-a0eb-65d82e426278 completed with status: COMPLETED
+INFO:     127.0.0.1:60601 - "GET /progress/0af63112-1c6a-4ac4-a0eb-65d82e426278 HTTP/1.1" 200 OK
+[2025-06-23 14:17:50,842] [INFO] [src.backend.progress_tracker] - Created batch c37210de-4683-4eec-ad73-13b74da9fc5e for 1 messages
+[2025-06-23 14:17:50,844] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: c37210de-4683-4eec-ad73-13b74da9fc5e
+INFO:     127.0.0.1:60659 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:17:50,845] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:17:50,845] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:17:50,846] [INFO] [src.backend.ingestion] - Starting ingestion for message test_fixed_doc
+[2025-06-23 14:17:50,846] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_fixed_doc
+[2025-06-23 14:17:50,847] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:17:50,994] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:17:50,997] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:17:50,997] [INFO] [src.backend.ingestion] - Message test_fixed_doc: Combined and cleaned content length: 48
+[2025-06-23 14:17:50,997] [INFO] [src.backend.ingestion] - Message test_fixed_doc: Split into 1 chunks for embedding.
+[2025-06-23 14:17:50,997] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:17:51,238] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:17:51,238] [INFO] [src.backend.ingestion] - Message test_fixed_doc: Generated 1 embedding vectors.
+[2025-06-23 14:17:51,239] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:17:51,853] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:17:51,853] [INFO] [src.backend.ingestion] - Message test_fixed_doc: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:17:51,856] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_fixed_doc
+[2025-06-23 14:17:51,857] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:17:51,857] [INFO] [src.backend.progress_tracker] - Batch c37210de-4683-4eec-ad73-13b74da9fc5e completed with status: COMPLETED
+INFO:     127.0.0.1:60664 - "GET /progress/c37210de-4683-4eec-ad73-13b74da9fc5e HTTP/1.1" 200 OK
+[2025-06-23 14:19:45,007] [INFO] [src.backend.progress_tracker] - Created batch 983ce699-a734-469f-8580-3025fb0603fe for 1 messages
+[2025-06-23 14:19:45,007] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 983ce699-a734-469f-8580-3025fb0603fe
+INFO:     127.0.0.1:60689 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:19:45,008] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:19:45,008] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:19:45,008] [INFO] [src.backend.ingestion] - Starting ingestion for message test_fork_method
+[2025-06-23 14:19:45,008] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_fork_method
+[2025-06-23 14:19:45,009] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:19:45,128] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:19:45,130] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:19:45,131] [INFO] [src.backend.ingestion] - Message test_fork_method: Combined and cleaned content length: 41
+[2025-06-23 14:19:45,131] [INFO] [src.backend.ingestion] - Message test_fork_method: Split into 1 chunks for embedding.
+[2025-06-23 14:19:45,131] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:19:50,072] [INFO] [src.backend.progress_tracker] - Created batch 166ca393-e702-4363-939b-8c9c309e2679 for 1 messages
+[2025-06-23 14:19:50,073] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 166ca393-e702-4363-939b-8c9c309e2679
+INFO:     127.0.0.1:60693 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:19:50,073] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:19:50,073] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:19:50,074] [INFO] [src.backend.ingestion] - Starting ingestion for message test_fork_method
+[2025-06-23 14:19:50,074] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_fork_method
+[2025-06-23 14:19:50,074] [INFO] [src.backend.file_processor] - Processing 1 attachments
+INFO:     127.0.0.1:60696 - "GET /progress/166ca393-e702-4363-939b-8c9c309e2679 HTTP/1.1" 200 OK
+[2025-06-23 14:19:50,179] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:19:50,179] [INFO] [src.backend.ingestion] - Message test_fork_method: Generated 1 embedding vectors.
+[2025-06-23 14:19:50,180] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:19:51,082] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:19:51,082] [INFO] [src.backend.ingestion] - Message test_fork_method: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:19:51,087] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_fork_method
+[2025-06-23 14:19:51,093] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:19:51,094] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:19:51,095] [INFO] [src.backend.progress_tracker] - Batch 983ce699-a734-469f-8580-3025fb0603fe completed with status: COMPLETED
+[2025-06-23 14:19:51,095] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:19:51,096] [INFO] [src.backend.ingestion] - Message test_fork_method: Combined and cleaned content length: 41
+[2025-06-23 14:19:51,096] [INFO] [src.backend.ingestion] - Message test_fork_method: Split into 1 chunks for embedding.
+[2025-06-23 14:19:51,096] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:19:51,312] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:19:51,312] [INFO] [src.backend.ingestion] - Message test_fork_method: Generated 1 embedding vectors.
+[2025-06-23 14:19:51,312] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:19:51,500] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:19:51,500] [INFO] [src.backend.ingestion] - Message test_fork_method: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:19:51,501] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_fork_method
+[2025-06-23 14:19:51,501] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:19:51,501] [INFO] [src.backend.progress_tracker] - Batch 166ca393-e702-4363-939b-8c9c309e2679 completed with status: COMPLETED
+INFO:     127.0.0.1:60699 - "GET /progress/983ce699-a734-469f-8580-3025fb0603fe HTTP/1.1" 200 OK
+[2025-06-23 14:21:19,988] [INFO] [src.backend.progress_tracker] - Created batch f94b0a29-57a5-477e-ad1a-a7ac75539073 for 1 messages
+[2025-06-23 14:21:19,988] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: f94b0a29-57a5-477e-ad1a-a7ac75539073
+INFO:     127.0.0.1:60709 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:21:19,990] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:21:19,990] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:21:19,990] [INFO] [src.backend.ingestion] - Starting ingestion for message test_final_fix
+[2025-06-23 14:21:19,991] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_final_fix
+[2025-06-23 14:21:19,991] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:21:20,129] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:21:20,130] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:21:20,131] [INFO] [src.backend.ingestion] - Message test_final_fix: Combined and cleaned content length: 56
+[2025-06-23 14:21:20,131] [INFO] [src.backend.ingestion] - Message test_final_fix: Split into 1 chunks for embedding.
+[2025-06-23 14:21:20,131] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:21:20,478] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:21:20,478] [INFO] [src.backend.ingestion] - Message test_final_fix: Generated 1 embedding vectors.
+[2025-06-23 14:21:20,478] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:21:21,275] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:21:21,275] [INFO] [src.backend.ingestion] - Message test_final_fix: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:21:21,278] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_final_fix
+[2025-06-23 14:21:21,279] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:21:21,279] [INFO] [src.backend.progress_tracker] - Batch f94b0a29-57a5-477e-ad1a-a7ac75539073 completed with status: COMPLETED
+INFO:     127.0.0.1:60715 - "GET /progress/f94b0a29-57a5-477e-ad1a-a7ac75539073 HTTP/1.1" 200 OK
+[2025-06-23 14:22:51,558] [INFO] [src.backend.progress_tracker] - Created batch 22f140c9-1319-432f-af32-612fac7aaff5 for 1 messages
+[2025-06-23 14:22:51,559] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 22f140c9-1319-432f-af32-612fac7aaff5
+INFO:     127.0.0.1:60723 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:22:51,559] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:22:51,559] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:22:51,559] [INFO] [src.backend.ingestion] - Starting ingestion for message test_complete_reset
+[2025-06-23 14:22:51,559] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_complete_reset
+[2025-06-23 14:22:51,560] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:22:51,712] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:22:51,714] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:22:51,714] [INFO] [src.backend.ingestion] - Message test_complete_reset: Combined and cleaned content length: 46
+[2025-06-23 14:22:51,715] [INFO] [src.backend.ingestion] - Message test_complete_reset: Split into 1 chunks for embedding.
+[2025-06-23 14:22:51,715] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:22:51,985] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:22:51,985] [INFO] [src.backend.ingestion] - Message test_complete_reset: Generated 1 embedding vectors.
+[2025-06-23 14:22:51,985] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:22:52,627] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:22:52,627] [INFO] [src.backend.ingestion] - Message test_complete_reset: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:22:52,632] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_complete_reset
+[2025-06-23 14:22:52,633] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:22:52,633] [INFO] [src.backend.progress_tracker] - Batch 22f140c9-1319-432f-af32-612fac7aaff5 completed with status: COMPLETED
+INFO:     127.0.0.1:60728 - "GET /health HTTP/1.1" 200 OK
+[2025-06-23 14:23:09,986] [INFO] [src.backend.progress_tracker] - Created batch 78365ab1-697b-4e93-ba7b-e0906ba47d5f for 1 messages
+[2025-06-23 14:23:09,986] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 78365ab1-697b-4e93-ba7b-e0906ba47d5f
+INFO:     127.0.0.1:60730 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:23:09,986] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:23:09,987] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:23:09,987] [INFO] [src.backend.ingestion] - Starting ingestion for message test_env_reset
+[2025-06-23 14:23:09,987] [INFO] [src.backend.ingestion] - Processing 1 attachments for message test_env_reset
+[2025-06-23 14:23:09,987] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:23:10,118] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:23:10,119] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:23:10,120] [INFO] [src.backend.ingestion] - Message test_env_reset: Combined and cleaned content length: 37
+[2025-06-23 14:23:10,120] [INFO] [src.backend.ingestion] - Message test_env_reset: Split into 1 chunks for embedding.
+[2025-06-23 14:23:10,120] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:23:10,420] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:23:10,421] [INFO] [src.backend.ingestion] - Message test_env_reset: Generated 1 embedding vectors.
+[2025-06-23 14:23:10,421] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:23:10,625] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:23:10,625] [INFO] [src.backend.ingestion] - Message test_env_reset: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:23:10,628] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message test_env_reset
+[2025-06-23 14:23:10,629] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:23:10,629] [INFO] [src.backend.progress_tracker] - Batch 78365ab1-697b-4e93-ba7b-e0906ba47d5f completed with status: COMPLETED
+INFO:     127.0.0.1:60734 - "GET /progress/78365ab1-697b-4e93-ba7b-e0906ba47d5f HTTP/1.1" 200 OK
+[2025-06-23 14:24:47,530] [INFO] [src.backend.progress_tracker] - Created batch aaae53be-45f0-4e2a-b117-03f83155266e for 1 messages
+[2025-06-23 14:24:47,530] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: aaae53be-45f0-4e2a-b117-03f83155266e
+INFO:     127.0.0.1:60771 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:24:47,530] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:24:47,531] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:24:47,531] [INFO] [src.backend.ingestion] - Starting ingestion for message text_only_test
+[2025-06-23 14:24:47,531] [INFO] [src.backend.ingestion] - Message text_only_test: Combined and cleaned content length: 179
+[2025-06-23 14:24:47,531] [INFO] [src.backend.ingestion] - Message text_only_test: Split into 1 chunks for embedding.
+[2025-06-23 14:24:47,531] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:24:47,794] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:24:47,794] [INFO] [src.backend.ingestion] - Message text_only_test: Generated 1 embedding vectors.
+[2025-06-23 14:24:47,795] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:24:48,416] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:24:48,416] [INFO] [src.backend.ingestion] - Message text_only_test: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:24:48,421] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message text_only_test
+[2025-06-23 14:24:48,421] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:24:48,421] [INFO] [src.backend.progress_tracker] - Batch aaae53be-45f0-4e2a-b117-03f83155266e completed with status: COMPLETED
+INFO:     127.0.0.1:60775 - "GET /progress/aaae53be-45f0-4e2a-b117-03f83155266e HTTP/1.1" 200 OK
+[2025-06-23 14:25:07,521] [INFO] [src.backend.progress_tracker] - Created batch 2f296fba-edd6-47d9-90cb-e2a727e4aa7d for 1 messages
+[2025-06-23 14:25:07,521] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 2f296fba-edd6-47d9-90cb-e2a727e4aa7d
+INFO:     127.0.0.1:60777 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-23 14:25:07,522] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-23 14:25:07,522] [INFO] [src.backend.ingestion] - Processing 1 pending messages
+[2025-06-23 14:25:07,523] [INFO] [src.backend.ingestion] - Starting ingestion for message attachment_test
+[2025-06-23 14:25:07,523] [INFO] [src.backend.ingestion] - Processing 1 attachments for message attachment_test
+[2025-06-23 14:25:07,523] [INFO] [src.backend.file_processor] - Processing 1 attachments
+[2025-06-23 14:25:07,620] [ERROR] [src.backend.file_processor] - Document parsing error for https://cdn.discordapp.com/attachments/1370859921985507359/1370860325640999072/Health_Canada_Labeling_Requirements.docx?ex=685a61ea&is=6859106a&hm=314833361c0cb3ec28ca49890554681c2bb5dfac35d811b0c5937392268e1413&: partition_docx is not available. Install the docx dependencies with pip install "unstructured[docx]"
+[2025-06-23 14:25:07,622] [INFO] [src.backend.file_processor] - Successfully processed 0 attachments
+[2025-06-23 14:25:07,623] [INFO] [src.backend.ingestion] - Message attachment_test: Combined and cleaned content length: 118
+[2025-06-23 14:25:07,623] [INFO] [src.backend.ingestion] - Message attachment_test: Split into 1 chunks for embedding.
+[2025-06-23 14:25:07,623] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-23 14:25:07,898] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-23 14:25:07,898] [INFO] [src.backend.ingestion] - Message attachment_test: Generated 1 embedding vectors.
+[2025-06-23 14:25:07,899] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-23 14:25:08,092] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-23 14:25:08,092] [INFO] [src.backend.ingestion] - Message attachment_test: Sent 1 vectors to Pinecone for storage.
+[2025-06-23 14:25:08,098] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message attachment_test
+[2025-06-23 14:25:08,100] [INFO] [src.backend.ingestion] - Batch ingestion completed: 1 successful, 0 failed
+[2025-06-23 14:25:08,100] [INFO] [src.backend.progress_tracker] - Batch 2f296fba-edd6-47d9-90cb-e2a727e4aa7d completed with status: COMPLETED
+INFO:     127.0.0.1:60781 - "GET /progress/2f296fba-edd6-47d9-90cb-e2a727e4aa7d HTTP/1.1" 200 OK
+[2025-06-23 15:12:15,185] [INFO] [src.bot.discord_bot] - Bot is ready! Logged in as Vita's AI Bot#9728
+[2025-06-23 15:12:15,188] [INFO] [src.bot.discord_bot] - Connected to 1 guilds

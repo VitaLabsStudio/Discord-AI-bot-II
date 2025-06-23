@@ -1,7 +1,10 @@
 import os
-from typing import List, Dict, Any
+from datetime import datetime
+from typing import List, Dict, Any, Optional
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from cachetools import TTLCache
+from .database import vita_db
 from .logger import get_logger
 from .retry_utils import retry_on_api_error
 
@@ -11,38 +14,46 @@ load_dotenv()
 logger = get_logger(__name__)
 
 class LLMClient:
-    """Manages interactions with OpenAI's chat completion API."""
+    """Enhanced LLM client with conversational memory and role adaptation."""
     
     def __init__(self):
         self.client = AsyncOpenAI(
             api_key=os.getenv("OPENAI_API_KEY")
         )
         self.chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o")
+        
+        # Conversational memory cache (TTL = 1 hour)
+        self.conversation_cache = TTLCache(maxsize=1000, ttl=3600)
     
     @retry_on_api_error(max_attempts=3, min_wait=1.0, max_wait=30.0)
-    async def generate_answer(self, question: str, context_documents: List[Dict], user_id: str = None) -> Dict[str, Any]:
+    async def generate_answer(self, question: str, context_documents: List[Dict], 
+                            user_id: str = None, user_roles: List[str] = None) -> Dict[str, Any]:
         """
-        Generate an answer using the RAG pipeline with retry logic.
+        Generate an answer using the RAG pipeline with retry logic, conversational memory, and role adaptation.
         
         Args:
             question: User's question
             context_documents: List of relevant documents from vector search
-            user_id: User ID for logging
+            user_id: User ID for logging and conversation tracking
+            user_roles: User's roles for response adaptation
             
         Returns:
             Dictionary with answer, confidence, and processing info
         """
         try:
+            # Get conversation history for context
+            conversation_history = self._get_conversation_history(user_id) if user_id else []
+            
             # Build context from documents
             context_text = self._build_context(context_documents)
             
-            # Create system prompt
-            system_prompt = self._create_system_prompt()
+            # Create role-adaptive system prompt
+            system_prompt = self._create_system_prompt(user_roles, conversation_history)
             
-            # Create user prompt with context
-            user_prompt = self._create_user_prompt(question, context_text)
+            # Create user prompt with context and conversation history
+            user_prompt = self._create_user_prompt(question, context_text, conversation_history)
             
-            logger.info(f"Generating answer for user {user_id} with {len(context_documents)} context documents")
+            logger.info(f"Generating answer for user {user_id} with {len(context_documents)} context documents and {len(conversation_history)} conversation history")
             
             # Call OpenAI API
             response = await self.client.chat.completions.create(
@@ -62,10 +73,15 @@ class LLMClient:
             # Calculate confidence based on context relevance
             confidence = self._calculate_confidence(context_documents)
             
+            # Save conversation to memory
+            if user_id:
+                self._save_conversation(user_id, question, answer)
+            
             result = {
                 "answer": answer,
                 "confidence": confidence,
                 "context_count": len(context_documents),
+                "conversation_context": len(conversation_history),
                 "tokens_used": response.usage.total_tokens if response.usage else 0
             }
             
@@ -117,40 +133,89 @@ class LLMClient:
         
         return "".join(context_parts)
     
-    def _create_system_prompt(self) -> str:
-        """Create the system prompt for the LLM."""
-        return """You are VITA, an AI knowledge assistant for a Discord community. Your role is to provide helpful, accurate, and contextual answers based on the conversation history and knowledge base.
+    def _create_system_prompt(self, user_roles: Optional[List[str]] = None, 
+                             conversation_history: Optional[List[Dict]] = None) -> str:
+        """Create a role-adaptive system prompt for the LLM."""
+        
+        base_prompt = """You are VITA, an AI knowledge assistant for a Discord community. Your role is to provide helpful, accurate, and contextual answers based on the conversation history and knowledge base."""
+        
+        # Role-specific adaptations
+        role_adaptations = []
+        if user_roles:
+            for role in user_roles:
+                if any(exec_role in role.lower() for exec_role in ['ceo', 'cto', 'vp', 'director', 'executive']):
+                    role_adaptations.append("You are speaking to an executive. Provide high-level, strategic summaries first. Focus on outcomes, decisions, and business impact. Be concise and emphasize actionable insights.")
+                elif any(mgmt_role in role.lower() for mgmt_role in ['manager', 'lead', 'project manager']):
+                    role_adaptations.append("You are speaking to a manager. Include operational details and team-relevant information. Highlight project status, blockers, and coordination needs.")
+                elif any(tech_role in role.lower() for tech_role in ['engineer', 'developer', 'technical']):
+                    role_adaptations.append("You are speaking to an engineer. Provide technical details, include code snippets if relevant, and cite specific technical documents. Be precise about implementation details.")
+        
+        # Conversation context
+        context_guidance = ""
+        if conversation_history:
+            context_guidance = "\n\nConversation Context: You have access to the recent conversation history with this user. Use it to provide contextual follow-up answers and avoid repeating information."
+        
+        # Combine all parts
+        full_prompt = base_prompt
+        if role_adaptations:
+            full_prompt += "\n\nRole-Specific Guidance:\n" + "\n".join(role_adaptations)
+        
+        full_prompt += context_guidance
+        
+        full_prompt += """
 
-Guidelines:
+Core Guidelines:
 1. Answer questions using the provided context documents
 2. If the context doesn't contain enough information, say so clearly
-3. Be concise but comprehensive in your responses
-4. Maintain a helpful and professional tone
-5. If you're uncertain about something, express that uncertainty
-6. Reference specific messages or sources when relevant
-7. Don't make assumptions beyond what's provided in the context
+3. Maintain a helpful and professional tone appropriate to the user's role
+4. If you're uncertain about something, express that uncertainty
+5. Reference specific messages or sources when relevant
+6. Don't make assumptions beyond what's provided in the context
+7. Use conversation history to provide better follow-up responses
 
 Remember: You are answering based on Discord community conversations and shared knowledge."""
+        
+        return full_prompt
     
-    def _create_user_prompt(self, question: str, context: str) -> str:
+    def _create_user_prompt(self, question: str, context: str, 
+                           conversation_history: Optional[List[Dict]] = None) -> str:
         """
-        Create the user prompt with question and context.
+        Create the user prompt with question, context, and conversation history.
         
         Args:
             question: User's question
             context: Formatted context from documents
+            conversation_history: Recent conversation exchanges
             
         Returns:
             Complete user prompt
         """
-        return f"""Based on the following context from our Discord community, please answer this question:
-
-Question: {question}
-
-Context:
-{context}
-
-Please provide a helpful answer based on the context above. If the context doesn't contain enough information to answer the question completely, please say so."""
+        prompt_parts = []
+        
+        # Add conversation history if available
+        if conversation_history:
+            prompt_parts.append("Recent Conversation History:")
+            for i, exchange in enumerate(conversation_history[-3:], 1):  # Last 3 exchanges
+                prompt_parts.append(f"Exchange {i}:")
+                prompt_parts.append(f"Q: {exchange.get('query_text', '')}")
+                prompt_parts.append(f"A: {exchange.get('answer_text', '')}")
+                prompt_parts.append("")
+        
+        prompt_parts.extend([
+            "Based on the following context from our Discord community, please answer this question:",
+            "",
+            f"Question: {question}",
+            "",
+            "Context:",
+            context,
+            "",
+            "Please provide a helpful answer based on the context above. If the context doesn't contain enough information to answer the question completely, please say so."
+        ])
+        
+        if conversation_history:
+            prompt_parts.append("Consider the conversation history to provide a contextual response that builds on previous exchanges.")
+        
+        return "\n".join(prompt_parts)
     
     def _calculate_confidence(self, context_documents: List[Dict]) -> float:
         """
@@ -184,6 +249,69 @@ Please provide a helpful answer based on the context above. If the context doesn
             confidence = confidence * 0.67  # Scale 0.0-0.6 to 0.0-0.4
         
         return min(confidence, 1.0)
+    
+    def _get_conversation_history(self, user_id: str) -> List[Dict]:
+        """
+        Get conversation history for a user from cache or database.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            List of recent conversation exchanges
+        """
+        # Check cache first
+        if user_id in self.conversation_cache:
+            return self.conversation_cache[user_id]
+        
+        # Get from database
+        conversations = vita_db.get_conversation_history(user_id, limit=5)
+        
+        # Convert to format expected by prompt
+        history = []
+        for conv in conversations:
+            history.append({
+                'query_text': conv.query_text,
+                'answer_text': conv.answer_text,
+                'timestamp': conv.timestamp.isoformat()
+            })
+        
+        # Cache for future use
+        self.conversation_cache[user_id] = history
+        
+        return history
+    
+    def _save_conversation(self, user_id: str, question: str, answer: str):
+        """
+        Save conversation exchange to memory and database.
+        
+        Args:
+            user_id: User ID
+            question: User's question
+            answer: VITA's response
+        """
+        try:
+            # Save to database
+            vita_db.save_conversation(user_id, question, answer)
+            
+            # Update cache
+            history = self._get_conversation_history(user_id)
+            new_exchange = {
+                'query_text': question,
+                'answer_text': answer,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            
+            # Add new exchange and keep last 5
+            history.insert(0, new_exchange)
+            history = history[:5]
+            
+            self.conversation_cache[user_id] = history
+            
+            logger.debug(f"Saved conversation for user {user_id}")
+            
+        except Exception as e:
+            logger.warning(f"Failed to save conversation for user {user_id}: {e}")
 
 # Global LLM client instance
 llm_client = LLMClient() 

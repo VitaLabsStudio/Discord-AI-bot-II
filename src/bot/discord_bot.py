@@ -344,6 +344,74 @@ class FeedbackView(discord.ui.View):
 
 # Slash Commands
 @discord.app_commands.describe(
+    days="Number of days to analyze (1-30, default: 7)"
+)
+async def digest_command(interaction: discord.Interaction, days: int = 7):
+    """Generate a thematic digest of recent server activity."""
+    await interaction.response.defer()
+    
+    try:
+        # Validate days parameter
+        if days < 1 or days > 30:
+            await interaction.followup.send("❌ Days parameter must be between 1 and 30.")
+            return
+        
+        # Call backend to generate digest
+        data = {"days": days}
+        bot = interaction.client
+        response = await bot._send_to_backend("/digest", data)
+        
+        if not response or "digest" not in response:
+            await interaction.followup.send("❌ Failed to generate digest. Please try again later.")
+            return
+        
+        digest = response["digest"]
+        
+        # Create main embed
+        embed = discord.Embed(
+            title=f"📊 {digest.get('title', 'Thematic Digest')}",
+            description=digest.get('summary', 'No summary available'),
+            color=0x4CAF50,
+            timestamp=datetime.utcnow()
+        )
+        
+        # Add overview
+        embed.add_field(
+            name="📈 Overview",
+            value=f"• **Documents Analyzed:** {digest.get('document_count', 0)}\n• **Key Themes:** {len(digest.get('themes', []))}\n• **Time Period:** Last {days} days",
+            inline=False
+        )
+        
+        # Add themes
+        themes = digest.get('themes', [])
+        if themes:
+            for i, theme in enumerate(themes[:4], 1):  # Limit to 4 themes for Discord embed limits
+                importance_emoji = "🔴" if theme.get('importance') == 'high' else "🟡" if theme.get('importance') == 'medium' else "🟢"
+                theme_summary = theme.get('summary', 'No summary')
+                if len(theme_summary) > 300:
+                    theme_summary = theme_summary[:297] + "..."
+                
+                embed.add_field(
+                    name=f"{importance_emoji} Theme {i}: {theme.get('theme_title', 'Unknown')}",
+                    value=f"{theme_summary}\n\n*{theme.get('document_count', 0)} related messages*",
+                    inline=False
+                )
+        else:
+            embed.add_field(
+                name="ℹ️ No Themes Identified",
+                value="Not enough data for thematic analysis. Try with more days or check if there are recent conversations.",
+                inline=False
+            )
+        
+        embed.set_footer(text="VITA v4.0 • Thematic Analysis from server conversations")
+        
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        logger.error(f"Failed to process digest command: {e}")
+        await interaction.followup.send("❌ An error occurred while generating the digest. Please try again later.")
+
+@discord.app_commands.describe(
     question="Your question for the AI knowledge assistant"
 )
 async def ask_command(interaction: discord.Interaction, question: str):
@@ -1036,6 +1104,14 @@ def setup_bot():
             name="ask",
             description="Ask a question to the AI knowledge assistant",
             callback=ask_command
+        )
+    )
+    
+    bot.tree.add_command(
+        discord.app_commands.Command(
+            name="digest",
+            description="Generate a thematic summary of recent server activity",
+            callback=digest_command
         )
     )
     

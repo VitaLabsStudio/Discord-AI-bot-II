@@ -15,12 +15,18 @@ class ProgressTracker:
         self._active_batches: Dict[str, BatchProgress] = {}
         self._max_recent_logs = 10  # Keep last 10 log entries
         self._cleanup_task = None
-        self._start_cleanup_task()
+        self._cleanup_started = False
     
-    def _start_cleanup_task(self):
-        """Start automatic cleanup task."""
-        if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+    def _ensure_cleanup_task(self):
+        """Ensure cleanup task is started (only when event loop is available)."""
+        if not self._cleanup_started:
+            try:
+                if self._cleanup_task is None or self._cleanup_task.done():
+                    self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+                    self._cleanup_started = True
+            except RuntimeError:
+                # No event loop running, defer until later
+                pass
     
     async def _periodic_cleanup(self):
         """Periodically clean up old batches."""
@@ -44,6 +50,9 @@ class ProgressTracker:
         Returns:
             Unique batch ID
         """
+        # Ensure cleanup task is running
+        self._ensure_cleanup_task()
+        
         batch_id = str(uuid.uuid4())
         
         progress = BatchProgress(

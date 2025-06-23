@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from .schemas import IngestRequest
@@ -8,6 +9,9 @@ from .embedding import embedding_manager
 from .permissions import permission_manager
 from .utils import clean_text, redact_sensitive_info, split_text_for_embedding
 from .progress_tracker import progress_tracker
+from .ontology import ontology_manager
+from .llm_client import llm_client
+from .retry_utils import retry_on_api_error
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -209,6 +213,14 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
                 )
             return
         
+        # *** NEW: Enhanced Ontology Tagging and Knowledge Graph Update ***
+        try:
+            await _enhance_with_ontology_and_graph(req.message_id, combined_content, log_details)
+        except Exception as ontology_error:
+            logger.warning(f"Ontology enhancement failed for message {req.message_id}: {ontology_error}")
+            log_details.append(f"Ontology enhancement failed: {str(ontology_error)}")
+            # Don't fail the entire ingestion if ontology enhancement fails
+        
         # Mark as processed
         mark_processed(req.message_id, req.channel_id, req.user_id)
         log_details.append("Successfully marked as processed")
@@ -290,4 +302,139 @@ async def run_batch_ingestion_task(requests: List[IngestRequest], batch_id: Opti
         logger.error(f"Failed to run batch ingestion: {e}")
         if batch_id:
             progress_tracker.complete_batch(batch_id, "FAILED")
+        raise
+
+@retry_on_api_error(max_attempts=3, min_wait=1.0, max_wait=15.0)
+async def _enhance_with_ontology_and_graph(message_id: str, content: str, log_details: List[str]):
+    """
+    Enhance message with ontology tagging and knowledge graph updates.
+    
+    This is the core intelligence upgrade that makes VITA understand business context.
+    
+    Args:
+        message_id: Discord message ID
+        content: Combined message content
+        log_details: List to append progress details
+    """
+    try:
+        logger.debug(f"Starting ontology enhancement for message {message_id}")
+        
+        # Step 1: Ontology Tagging
+        ontology_prompt = ontology_manager.create_ontology_prompt(content)
+        if not ontology_prompt.strip():
+            log_details.append("Skipped ontology tagging - no concepts defined")
+            return
+        
+        # Call LLM for ontology tagging
+        tag_response = await llm_client.client.chat.completions.create(
+            model=llm_client.chat_model,
+            messages=[
+                {"role": "system", "content": "You are an expert business analyst who identifies and extracts business concepts from text. Always respond with valid JSON."},
+                {"role": "user", "content": ontology_prompt}
+            ],
+            temperature=0.1,
+            max_tokens=1000
+        )
+        
+        tag_response_text = tag_response.choices[0].message.content.strip()
+        logger.debug(f"Ontology tagging response for {message_id}: {tag_response_text}")
+        
+        # Parse ontology tagging results
+        try:
+            tag_data = json.loads(tag_response_text)
+            entities = tag_data.get('concepts', [])
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse ontology tagging JSON for message {message_id}")
+            log_details.append("Ontology tagging failed - invalid JSON response")
+            return
+        
+        if not entities:
+            log_details.append("No ontology concepts identified")
+            return
+        
+        # Step 2: Create/Update Knowledge Graph Nodes
+        node_ids = {}
+        for entity in entities:
+            if entity.get('confidence', 0) > 0.7:
+                try:
+                    node_id = vita_db.create_or_get_node(
+                        label=entity['concept'],
+                        name=entity['entity'],
+                        metadata={
+                            'confidence': entity.get('confidence', 0.8),
+                            'first_mentioned_message': message_id,
+                            'source': 'ontology_extraction'
+                        }
+                    )
+                    node_ids[entity['entity']] = node_id
+                    logger.debug(f"Created/updated node for {entity['concept']}:{entity['entity']}")
+                except Exception as e:
+                    logger.warning(f"Failed to create node for {entity['entity']}: {e}")
+        
+        log_details.append(f"Identified {len(entities)} concepts, created {len(node_ids)} graph nodes")
+        
+        # Step 3: Relationship Extraction (only if we have multiple entities)
+        if len(entities) >= 2:
+            relationship_prompt = ontology_manager.create_relationship_prompt(content, entities)
+            if relationship_prompt.strip():
+                try:
+                    # Call LLM for relationship extraction
+                    rel_response = await llm_client.client.chat.completions.create(
+                        model=llm_client.chat_model,
+                        messages=[
+                            {"role": "system", "content": "You are an expert business analyst who identifies relationships between business entities. Always respond with valid JSON."},
+                            {"role": "user", "content": relationship_prompt}
+                        ],
+                        temperature=0.1,
+                        max_tokens=800
+                    )
+                    
+                    rel_response_text = rel_response.choices[0].message.content.strip()
+                    logger.debug(f"Relationship extraction response for {message_id}: {rel_response_text}")
+                    
+                    # Parse relationship extraction results
+                    try:
+                        rel_data = json.loads(rel_response_text)
+                        relationships = rel_data.get('relationships', [])
+                    except json.JSONDecodeError:
+                        logger.warning(f"Failed to parse relationship extraction JSON for message {message_id}")
+                        relationships = []
+                    
+                    # Step 4: Create Graph Edges
+                    edges_created = 0
+                    for relationship in relationships:
+                        if relationship.get('confidence', 0) > 0.7:
+                            source_name = relationship.get('source', '')
+                            target_name = relationship.get('target', '')
+                            rel_type = relationship.get('relationship', '')
+                            
+                            if source_name in node_ids and target_name in node_ids:
+                                try:
+                                    vita_db.create_edge(
+                                        source_id=node_ids[source_name],
+                                        target_id=node_ids[target_name],
+                                        relationship=rel_type,
+                                        metadata={
+                                            'confidence': relationship.get('confidence', 0.8),
+                                            'source_message': message_id,
+                                            'extraction_method': 'llm_analysis'
+                                        },
+                                        message_id=message_id
+                                    )
+                                    edges_created += 1
+                                    logger.debug(f"Created relationship: {source_name} -{rel_type}-> {target_name}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to create relationship edge: {e}")
+                    
+                    log_details.append(f"Created {edges_created} relationship edges in knowledge graph")
+                    
+                except Exception as e:
+                    logger.warning(f"Relationship extraction failed for message {message_id}: {e}")
+                    log_details.append(f"Relationship extraction failed: {str(e)}")
+        
+        log_details.append("Ontology enhancement completed successfully")
+        logger.info(f"Successfully enhanced message {message_id} with ontology and graph data")
+        
+    except Exception as e:
+        logger.error(f"Ontology enhancement failed for message {message_id}: {e}")
         raise 
