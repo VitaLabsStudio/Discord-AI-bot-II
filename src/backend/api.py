@@ -496,12 +496,20 @@ async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
             filter_dict=permission_filter
         )
         
-        # Generate citations
+        # Generate citations with duplicate removal
         citations = []
+        seen_message_ids = set()
         for doc in similar_docs:
             metadata = doc.get("metadata", {})
+            message_id = metadata.get("message_id", "")
+            
+            # Skip duplicates by message_id
+            if message_id and message_id in seen_message_ids:
+                continue
+            seen_message_ids.add(message_id)
+            
             citation = {
-                "message_id": metadata.get("message_id", ""),
+                "message_id": message_id,
                 "channel_id": metadata.get("channel_id", ""),
                 "user_id": metadata.get("user_id", ""),
                 "timestamp": metadata.get("timestamp", ""),
@@ -794,10 +802,19 @@ async def _execute_reasoning_step(step: dict, original_question: str,
                 filter_dict=permission_filter
             )
             
+            # Track seen message IDs to prevent duplicates within this step
+            seen_message_ids = set()
             for doc in similar_docs:
                 metadata = doc.get("metadata", {})
+                message_id = metadata.get("message_id", "")
+                
+                # Skip duplicates by message_id
+                if message_id and message_id in seen_message_ids:
+                    continue
+                seen_message_ids.add(message_id)
+                
                 citation = {
-                    "message_id": metadata.get("message_id", ""),
+                    "message_id": message_id,
                     "channel_id": metadata.get("channel_id", ""),
                     "user_id": metadata.get("user_id", ""),
                     "timestamp": metadata.get("timestamp", ""),
@@ -857,12 +874,20 @@ async def _generate_fallback_response(request: QueryRequest, evidence_data: dict
             filter_dict=permission_filter
         )
         
-        # Generate fallback citations
+        # Generate fallback citations with duplicate removal
         citations = []
+        seen_message_ids = set()
         for doc in similar_docs:
             metadata = doc.get("metadata", {})
+            message_id = metadata.get("message_id", "")
+            
+            # Skip duplicates by message_id
+            if message_id and message_id in seen_message_ids:
+                continue
+            seen_message_ids.add(message_id)
+            
             citation = {
-                "message_id": metadata.get("message_id", ""),
+                "message_id": message_id,
                 "channel_id": metadata.get("channel_id", ""),
                 "user_id": metadata.get("user_id", ""),
                 "timestamp": metadata.get("timestamp", ""),

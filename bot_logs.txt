@@ -28048,3 +28048,140 @@ INFO:     127.0.0.1:53131 - "POST /ingest HTTP/1.1" 202 Accepted
 [2025-06-24 19:01:54,118] [INFO] [src.backend.embedding] - Generated 1 embeddings
 [2025-06-24 19:01:54,118] [INFO] [src.backend.ingestion] - Message 1387115529998696479: Generated 1 embedding vectors.
 [2025-06-24 19:01:54,119] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-24 19:01:54,321] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-24 19:01:54,321] [INFO] [src.backend.ingestion] - Message 1387115529998696479: Sent 1 vectors to Pinecone for storage.
+[2025-06-24 19:01:56,081] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message 1387115529998696479
+[2025-06-24 19:02:00,718] [INFO] [src.bot.discord_bot] - --- Message Received ---
+[2025-06-24 19:02:00,718] [INFO] [src.bot.discord_bot] - Message ID: 1387115559170347048 from User: 216332313267666945
+[2025-06-24 19:02:00,719] [INFO] [src.bot.discord_bot] - Source: channel '#chat' (1370074863892431061)
+[2025-06-24 19:02:00,721] [INFO] [src.bot.discord_bot] - Content length: 6, Attachments: 0
+[2025-06-24 19:02:00,721] [INFO] [src.bot.discord_bot] - Sending message 1387115559170347048 to backend for ingestion.
+[2025-06-24 19:02:00,726] [INFO] [src.backend.api] - Received ingestion request for message 1387115559170347048
+[2025-06-24 19:02:00,728] [INFO] [src.backend.api] - Queued ingestion task for message 1387115559170347048
+INFO:     127.0.0.1:53135 - "POST /ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:02:00,729] [INFO] [src.backend.ingestion] - Starting ingestion for message 1387115559170347048
+[2025-06-24 19:02:00,731] [INFO] [src.backend.ingestion] - Message 1387115559170347048: Combined and cleaned content length: 6
+[2025-06-24 19:02:00,732] [INFO] [src.backend.ingestion] - Message 1387115559170347048: Split into 1 chunks for embedding.
+[2025-06-24 19:02:00,733] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:02:00,985] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:02:00,985] [INFO] [src.backend.ingestion] - Message 1387115559170347048: Generated 1 embedding vectors.
+[2025-06-24 19:02:00,986] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-24 19:02:01,150] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-24 19:02:01,151] [INFO] [src.backend.ingestion] - Message 1387115559170347048: Sent 1 vectors to Pinecone for storage.
+[2025-06-24 19:02:02,486] [INFO] [src.bot.discord_bot] - --- Message Received ---
+[2025-06-24 19:02:02,487] [INFO] [src.bot.discord_bot] - Message ID: 1387115566527152199 from User: 216332313267666945
+[2025-06-24 19:02:02,488] [INFO] [src.bot.discord_bot] - Source: channel '#chat' (1370074863892431061)
+[2025-06-24 19:02:02,488] [INFO] [src.bot.discord_bot] - Content length: 11, Attachments: 0
+[2025-06-24 19:02:02,489] [INFO] [src.bot.discord_bot] - Sending message 1387115566527152199 to backend for ingestion.
+[2025-06-24 19:02:02,491] [INFO] [src.backend.api] - Received ingestion request for message 1387115566527152199
+[2025-06-24 19:02:02,493] [INFO] [src.backend.api] - Queued ingestion task for message 1387115566527152199
+INFO:     127.0.0.1:53135 - "POST /ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:02:02,494] [INFO] [src.backend.ingestion] - Starting ingestion for message 1387115566527152199
+[2025-06-24 19:02:02,496] [INFO] [src.backend.ingestion] - Message 1387115566527152199: Combined and cleaned content length: 11
+[2025-06-24 19:02:02,497] [INFO] [src.backend.ingestion] - Message 1387115566527152199: Split into 1 chunks for embedding.
+[2025-06-24 19:02:02,497] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:02:03,091] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:02:03,091] [INFO] [src.backend.ingestion] - Message 1387115566527152199: Generated 1 embedding vectors.
+[2025-06-24 19:02:03,092] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-24 19:02:03,294] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-24 19:02:03,295] [INFO] [src.backend.ingestion] - Message 1387115566527152199: Sent 1 vectors to Pinecone for storage.
+[2025-06-24 19:02:03,312] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message 1387115559170347048
+[2025-06-24 19:02:04,983] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message 1387115566527152199
+[2025-06-24 19:03:16,651] [INFO] [src.bot.discord_bot] - --- Message Received ---
+[2025-06-24 19:03:16,651] [INFO] [src.bot.discord_bot] - Message ID: 1387115877673074718 from User: 216332313267666945
+[2025-06-24 19:03:16,652] [INFO] [src.bot.discord_bot] - Source: channel '#chat' (1370074863892431061)
+[2025-06-24 19:03:16,652] [INFO] [src.bot.discord_bot] - Content length: 55, Attachments: 0
+[2025-06-24 19:03:16,653] [INFO] [src.bot.discord_bot] - Sending message 1387115877673074718 to backend for ingestion.
+[2025-06-24 19:03:16,658] [INFO] [src.backend.api] - Received ingestion request for message 1387115877673074718
+[2025-06-24 19:03:16,659] [INFO] [src.backend.api] - Queued ingestion task for message 1387115877673074718
+INFO:     127.0.0.1:53150 - "POST /ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:03:16,661] [INFO] [src.backend.ingestion] - Starting ingestion for message 1387115877673074718
+[2025-06-24 19:03:16,662] [INFO] [src.backend.ingestion] - Message 1387115877673074718: Combined and cleaned content length: 55
+[2025-06-24 19:03:16,664] [INFO] [src.backend.ingestion] - Message 1387115877673074718: Split into 1 chunks for embedding.
+[2025-06-24 19:03:16,664] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:03:16,989] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:03:16,991] [INFO] [src.backend.ingestion] - Message 1387115877673074718: Generated 1 embedding vectors.
+[2025-06-24 19:03:16,991] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-24 19:03:17,553] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-24 19:03:17,554] [INFO] [src.backend.ingestion] - Message 1387115877673074718: Sent 1 vectors to Pinecone for storage.
+[2025-06-24 19:03:19,759] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message 1387115877673074718
+[2025-06-24 19:03:23,782] [INFO] [src.bot.discord_bot] - --- Message Received ---
+[2025-06-24 19:03:23,783] [INFO] [src.bot.discord_bot] - Message ID: 1387115907574141019 from User: 216332313267666945
+[2025-06-24 19:03:23,783] [INFO] [src.bot.discord_bot] - Source: channel '#chat' (1370074863892431061)
+[2025-06-24 19:03:23,784] [INFO] [src.bot.discord_bot] - Content length: 35, Attachments: 0
+[2025-06-24 19:03:23,785] [INFO] [src.bot.discord_bot] - Sending message 1387115907574141019 to backend for ingestion.
+[2025-06-24 19:03:23,788] [INFO] [src.backend.api] - Received ingestion request for message 1387115907574141019
+[2025-06-24 19:03:23,791] [INFO] [src.backend.api] - Queued ingestion task for message 1387115907574141019
+INFO:     127.0.0.1:53156 - "POST /ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:03:23,792] [INFO] [src.backend.ingestion] - Starting ingestion for message 1387115907574141019
+[2025-06-24 19:03:23,794] [INFO] [src.backend.ingestion] - Message 1387115907574141019: Combined and cleaned content length: 35
+[2025-06-24 19:03:23,795] [INFO] [src.backend.ingestion] - Message 1387115907574141019: Split into 1 chunks for embedding.
+[2025-06-24 19:03:23,795] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:03:24,168] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:03:24,169] [INFO] [src.backend.ingestion] - Message 1387115907574141019: Generated 1 embedding vectors.
+[2025-06-24 19:03:24,170] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-24 19:03:24,392] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-24 19:03:24,393] [INFO] [src.backend.ingestion] - Message 1387115907574141019: Sent 1 vectors to Pinecone for storage.
+[2025-06-24 19:03:25,980] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message 1387115907574141019
+[2025-06-24 19:03:59,476] [INFO] [__main__] - Starting VITA Discord AI Knowledge Assistant
+[2025-06-24 19:03:59,476] [INFO] [__main__] - Press Ctrl+C to stop the application
+[2025-06-24 19:03:59,564] [INFO] [__main__] - Killing existing VITA process 8917
+[2025-06-24 19:03:59,564] [INFO] [__main__] - Killing existing VITA process 8932
+[2025-06-24 19:03:59,565] [INFO] [__main__] - Killing existing VITA process 8933
+[2025-06-24 19:03:59,566] [INFO] [__main__] - Killed 3 existing VITA processes
+[2025-06-24 19:04:01,576] [INFO] [__main__] - Both processes started successfully
+[2025-06-24 19:04:01,576] [INFO] [__main__] - Backend PID: 9251
+[2025-06-24 19:04:01,577] [INFO] [__main__] - Bot PID: 9252
+[2025-06-24 19:04:01,577] [INFO] [__main__] - Backend available at: http://localhost:8000
+[2025-06-24 19:04:01,577] [INFO] [__main__] - Backend health check: http://localhost:8000/health
+[2025-06-24 19:04:01,579] [INFO] [__main__] - Starting Discord bot
+[2025-06-24 19:04:01,590] [INFO] [src.bot.discord_bot] - Starting Discord bot...
+[2025-06-24 19:04:02,349] [INFO] [src.bot.discord_bot] - Synced 6 command(s)
+[2025-06-24 19:04:02,716] [INFO] [src.backend.database] - Database tables created successfully
+[2025-06-24 19:04:02,717] [INFO] [src.backend.database] - Database initialized at vita_data.db
+[2025-06-24 19:04:03,802] [INFO] [src.backend.file_processor] - unstructured version attribute not found
+[2025-06-24 19:04:04,743] [INFO] [src.bot.discord_bot] - Bot is ready! Logged in as Vita's AI Bot#9728
+[2025-06-24 19:04:04,744] [INFO] [src.bot.discord_bot] - Connected to 1 guilds
+[2025-06-24 19:04:19,085] [INFO] [src.backend.file_processor] - Auto partition function loaded
+[2025-06-24 19:04:19,086] [INFO] [src.backend.file_processor] - DocX partition function loaded
+[2025-06-24 19:04:19,086] [INFO] [src.backend.file_processor] - PDF partition function loaded
+[2025-06-24 19:04:19,185] [INFO] [src.backend.file_processor] - Tesseract OCR available, version: 5.5.1
+[2025-06-24 19:04:23,699] [INFO] [src.backend.embedding] - Connected to Pinecone index: curoseoaiembed
+[2025-06-24 19:04:23,723] [INFO] [src.backend.ontology] - Loaded ontology with 10 concepts and 7 relationship types
+[2025-06-24 19:04:23,747] [INFO] [src.backend.query_router] - Loaded FAQ cache with 8 exact matches
+[2025-06-24 19:04:23,781] [INFO] [__main__] - Starting FastAPI backend on 0.0.0.0:8000
+INFO:     Started server process [9251]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:53186 - "GET /health HTTP/1.1" 200 OK
+[2025-06-24 19:04:34,491] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:04:34,493] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:04:39,374] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: ```json
+{
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+    ...
+[2025-06-24 19:04:39,386] [ERROR] [src.backend.api] - Multi-hop query execution failed: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:04:39,387] [WARNING] [src.backend.api] - Evidence chain 0dc62518-6bc4-472d-b18a-49c6e4e90ad2 encountered error: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:04:39,388] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:04:40,037] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:04:40,535] [INFO] [src.backend.embedding] - Found 10 similar documents
+INFO:     127.0.0.1:53188 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:04:52,213] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:04:52,214] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:04:57,549] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: ```json
+{
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+    ...
+[2025-06-24 19:04:57,557] [ERROR] [src.backend.api] - Multi-hop query execution failed: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:04:57,557] [WARNING] [src.backend.api] - Evidence chain a9f1252e-4f6f-4616-98e7-55fa5649228e encountered error: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:04:57,558] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:04:57,997] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:04:58,132] [INFO] [src.backend.embedding] - Found 5 similar documents
+INFO:     127.0.0.1:53198 - "POST /query HTTP/1.1" 200 OK
