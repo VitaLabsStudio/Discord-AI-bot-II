@@ -131,7 +131,7 @@ class VitaDiscordBot(commands.Bot):
         else:
             source_description = f"channel '#{message.channel.name}' ({message.channel.id})"
 
-        logger.info(f"--- Message Received ---")
+        logger.info("--- Message Received ---")
         logger.info(f"Message ID: {message.id} from User: {message.author.id}")
         logger.info(f"Source: {source_description}")
         logger.info(f"Content length: {len(message.content)}, Attachments: {len(message.attachments)}")
@@ -225,7 +225,7 @@ class VitaDiscordBot(commands.Bot):
                                 result = await response.json()
                                 logger.debug(f"Backend DELETE successful: {response.status}")
                                 return result
-                            except:
+                            except (ValueError, TypeError):
                                 # DELETE might not return JSON content
                                 return {"status": "success"}
                         elif response.status == 500 and attempt < max_retries:
@@ -1111,7 +1111,7 @@ async def dlq_cleanup_command(interaction: discord.Interaction, days: int = 30):
         
         # Send cleanup request to backend
         bot = interaction.client
-        response = await bot._send_to_backend(f"/admin/dlq/cleanup", {"days": days})
+        response = await bot._send_to_backend("/admin/dlq/cleanup", {"days": days})
         
         if not response:
             await interaction.followup.send("❌ Failed to cleanup DLQ.")

@@ -299,7 +299,7 @@ class VitaDatabase:
             try:
                 total_feedback = session.query(UserFeedback).count()
                 helpful_feedback = session.query(UserFeedback).filter(
-                    UserFeedback.is_helpful == True
+                    UserFeedback.is_helpful
                 ).count()
                 
                 helpful_percentage = (helpful_feedback / total_feedback * 100) if total_feedback > 0 else 0
@@ -634,10 +634,10 @@ class VitaDatabase:
                 cutoff_date = datetime.utcnow() - timedelta(days=days)
                 
                 failed_chains = session.query(EvidenceChain).filter(
-                    EvidenceChain.was_successful == False,
+                    not EvidenceChain.was_successful,
                     EvidenceChain.timestamp >= cutoff_date
                 ).order_by(EvidenceChain.timestamp.desc()).all()
-                
+
                 
                 return failed_chains
                 

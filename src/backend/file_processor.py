@@ -524,7 +524,7 @@ class FileProcessor:
                 # Clean up temporary file
                 try:
                     os.unlink(temp_file_path)
-                except:
+                except OSError:
                     pass
                     
         except Exception as e:
