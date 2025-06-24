@@ -22,6 +22,8 @@ class ProcessedMessage(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
     channel_id = Column(String, index=True)
     user_id = Column(String, index=True)
+    # v6.2: Add content column for searchable text
+    content = Column(Text, nullable=True, index=True)
     # v6.1: Add content hash for duplicate detection
     content_hash = Column(String, unique=True, index=True, nullable=True)
     
@@ -988,7 +990,7 @@ class VitaDatabase:
                 return False
     
     def mark_message_processed_with_hash(self, message_id: str, content_hash: str, 
-                                       channel_id: str = None, user_id: str = None):
+                                       channel_id: str = None, user_id: str = None, content: str = None):
         """
         Mark a message as processed with content hash for duplicate detection.
         
@@ -997,6 +999,7 @@ class VitaDatabase:
             content_hash: SHA-256 hash of the content
             channel_id: Optional channel ID
             user_id: Optional user ID
+            content: Optional message content for searchability
         """
         with self.get_session() as session:
             try:
@@ -1009,7 +1012,8 @@ class VitaDatabase:
                     message_id=message_id,
                     content_hash=content_hash,
                     channel_id=channel_id,
-                    user_id=user_id
+                    user_id=user_id,
+                    content=content[:10000] if content else None  # Limit content to 10k chars
                 )
                 session.add(processed_msg)
                 session.commit()

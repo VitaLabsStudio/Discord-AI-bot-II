@@ -173,7 +173,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             
             # Mark as processed with hash but don't re-ingest
             try:
-                vita_db.mark_message_processed_with_hash(req.message_id, content_hash, req.channel_id, req.user_id)
+                vita_db.mark_message_processed_with_hash(req.message_id, content_hash, req.channel_id, req.user_id, combined_content)
             except Exception as e:
                 logger.warning(f"Failed to mark duplicate message {req.message_id}: {e}")
             
@@ -306,9 +306,9 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
                 log_details.append(f"Ontology enhancement failed: {str(ontology_error)}")
                 # Don't fail the entire ingestion if ontology enhancement fails
         
-        # Mark as processed with content hash
-        vita_db.mark_message_processed_with_hash(req.message_id, content_hash, req.channel_id, req.user_id)
-        log_details.append("Successfully marked as processed with content hash")
+        # Mark as processed with content hash and content
+        vita_db.mark_message_processed_with_hash(req.message_id, content_hash, req.channel_id, req.user_id, combined_content)
+        log_details.append("Successfully marked as processed with content hash and content")
         
         # Update progress tracker
         if batch_id:
