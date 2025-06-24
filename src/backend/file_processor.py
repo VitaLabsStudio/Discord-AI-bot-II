@@ -4,12 +4,14 @@ import asyncio
 import aiohttp
 import magic
 import pytesseract
+import hashlib
 from PIL import Image
 from io import BytesIO
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from dotenv import load_dotenv
 from .logger import get_logger
 from .utils import clean_text
+from .database import vita_db
 
 # Load environment variables
 load_dotenv()
@@ -20,35 +22,34 @@ logger = get_logger(__name__)
 def _ensure_unstructured_available():
     """Ensure unstructured dependencies are properly loaded in child processes."""
     try:
-        # Force import with specific error handling
+        # Import base unstructured first
+        import unstructured
+        logger.info(f"unstructured version: {unstructured.__version__}")
+        
+        # Test core partition function
         from unstructured.partition.auto import partition
-        from unstructured.partition.docx import partition_docx
-        from unstructured.partition.pdf import partition_pdf
-        logger.info("Successfully loaded unstructured dependencies")
-        return True
-    except ImportError as e:
-        logger.error(f"Failed to import unstructured dependencies: {e}")
+        logger.info("Auto partition function loaded")
         
-        # Try to diagnose the issue
+        # Try to import docx partition function specifically
         try:
-            import unstructured
-            logger.info(f"unstructured version: {unstructured.__version__}")
-        except:
-            logger.error("unstructured package not found")
-        
-        # Check if specific modules are available
-        try:
-            from unstructured.partition import docx
-            logger.info("docx partition module found")
+            from unstructured.partition.docx import partition_docx
+            logger.info("DocX partition function loaded")
         except ImportError as docx_error:
-            logger.error(f"docx partition module missing: {docx_error}")
+            logger.warning(f"DocX partition function not available: {docx_error}")
+            # This is not fatal - we can still process other formats
         
+        # Try to import pdf partition function specifically
         try:
-            from unstructured.partition import pdf  
-            logger.info("pdf partition module found")
+            from unstructured.partition.pdf import partition_pdf
+            logger.info("PDF partition function loaded")
         except ImportError as pdf_error:
-            logger.error(f"pdf partition module missing: {pdf_error}")
+            logger.warning(f"PDF partition function not available: {pdf_error}")
+            # This is not fatal - we can still process other formats
             
+        return True
+        
+    except ImportError as e:
+        logger.error(f"Failed to import core unstructured dependencies: {e}")
         return False
 
 # Test dependency availability at module load
@@ -89,73 +90,121 @@ class FileProcessor:
         if self.session:
             await self.session.close()
     
-    async def process_attachments(self, attachment_urls: List[str]) -> List[str]:
+    async def process_attachments(self, attachment_urls: List[str], return_ids: bool = False) -> Union[List[str], Dict[str, Any]]:
         """
         Process multiple attachment URLs and extract text content.
         
         Args:
             attachment_urls: List of attachment URLs to process
+            return_ids: If True, return dict with texts and attachment_ids for v6.1 traceability
             
         Returns:
-            List of extracted text content
+            List of extracted text content (legacy) or dict with texts and attachment_ids (v6.1)
         """
         if not attachment_urls:
-            return []
+            return {"texts": [], "attachment_ids": []} if return_ids else []
         
         logger.info(f"Processing {len(attachment_urls)} attachments")
         
         # Process attachments concurrently
-        tasks = [self._process_single_attachment(url) for url in attachment_urls]
+        tasks = [self._process_single_attachment(url, return_ids) for url in attachment_urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         # Filter out exceptions and empty results
         extracted_texts = []
+        attachment_ids = []
+        
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Failed to process attachment {attachment_urls[i]}: {result}")
                 self._log_to_dead_letter_queue(attachment_urls[i], str(result), "processing")
             elif result:
-                extracted_texts.append(result)
+                if return_ids and isinstance(result, dict):
+                    # v6.1: Extract both text and attachment ID
+                    if result.get('text'):
+                        extracted_texts.append(result['text'])
+                        if result.get('attachment_id'):
+                            attachment_ids.append(result['attachment_id'])
+                elif isinstance(result, str):
+                    # Legacy: just text
+                    extracted_texts.append(result)
         
         logger.info(f"Successfully processed {len(extracted_texts)} attachments")
-        return extracted_texts
+        
+        if return_ids:
+            return {
+                "texts": extracted_texts,
+                "attachment_ids": attachment_ids
+            }
+        else:
+            return extracted_texts
     
-    async def _process_single_attachment(self, url: str) -> str:
+    async def _process_single_attachment(self, url: str, return_ids: bool = False) -> Union[str, Dict[str, Any]]:
         """
         Process a single attachment URL.
         
         Args:
             url: Attachment URL to process
+            return_ids: If True, return dict with text and attachment_id
             
         Returns:
-            Extracted text content
+            Extracted text content (legacy) or dict with text and attachment_id (v6.1)
         """
         try:
             # Download file
             file_content = await self._download_file(url)
             if not file_content:
-                return ""
+                return "" if not return_ids else {"text": "", "attachment_id": None}
+            
+            # v6.1: Compute attachment ID (hash of file content)
+            attachment_id = None
+            if return_ids:
+                attachment_id = hashlib.sha256(file_content).hexdigest()
+                
+                # Register attachment in database
+                try:
+                    filename = url.split('/')[-1].split('?')[0]  # Extract filename from URL
+                    mime_type = self._get_mime_type(file_content)
+                    
+                    vita_db.register_attachment(
+                        attachment_id=attachment_id,
+                        original_filename=filename,
+                        file_size_bytes=len(file_content),
+                        mime_type=mime_type,
+                        download_url=url
+                    )
+                except Exception as reg_error:
+                    logger.warning(f"Failed to register attachment {attachment_id[:8]}...: {reg_error}")
             
             # Determine MIME type
             mime_type = self._get_mime_type(file_content)
             logger.debug(f"Detected MIME type for {url}: {mime_type}")
             
             # Process based on MIME type
+            text_content = ""
             if mime_type.startswith('image/'):
-                return await self._process_image(file_content, url)
+                text_content = await self._process_image(file_content, url)
             elif mime_type in ['application/pdf', 'text/plain', 'application/msword',
                              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                              'application/vnd.ms-powerpoint',
                              'application/vnd.openxmlformats-officedocument.presentationml.presentation']:
-                return await self._process_document(file_content, url)
+                text_content = await self._process_document(file_content, url)
             else:
                 logger.warning(f"Unsupported MIME type {mime_type} for {url}")
-                return ""
+                text_content = ""
+            
+            if return_ids:
+                return {
+                    "text": text_content,
+                    "attachment_id": attachment_id
+                }
+            else:
+                return text_content
                 
         except Exception as e:
             logger.error(f"Error processing attachment {url}: {e}")
             self._log_to_dead_letter_queue(url, str(e), "single_processing")
-            return ""
+            return "" if not return_ids else {"text": "", "attachment_id": None}
     
     async def _download_file(self, url: str) -> bytes:
         """
@@ -402,31 +451,58 @@ class FileProcessor:
             try:
                 logger.debug(f"Processing document with unstructured: {url}")
                 
-                # Partition document with error handling
-                try:
-                    elements = partition(temp_file_path)
-                    logger.debug(f"Successfully partitioned document with {len(elements)} elements")
-                except Exception as partition_error:
-                    logger.error(f"Partition failed for {url}: {partition_error}")
-                    
-                    # Try specific partition methods based on file extension
-                    if url.lower().endswith('.docx'):
+                # Determine file type from URL extension and try appropriate parser
+                file_extension = url.lower().split('.')[-1] if '.' in url else 'unknown'
+                elements = []
+                
+                # Try specific parsers first based on file extension
+                if file_extension == 'docx':
+                    try:
+                        from unstructured.partition.docx import partition_docx
+                        elements = partition_docx(temp_file_path)
+                        logger.debug(f"Successfully used docx-specific partition with {len(elements)} elements")
+                    except ImportError as import_error:
+                        logger.warning(f"DocX partition not available: {import_error}")
+                        # Fall back to general partition
+                        elements = partition(temp_file_path)
+                        logger.debug(f"Used general partition as fallback with {len(elements)} elements")
+                    except Exception as docx_error:
+                        logger.error(f"DOCX-specific partition failed: {docx_error}")
+                        # Fall back to general partition
                         try:
-                            from unstructured.partition.docx import partition_docx
-                            elements = partition_docx(temp_file_path)
-                            logger.debug("Successfully used docx-specific partition")
-                        except Exception as docx_error:
-                            logger.error(f"DOCX partition failed: {docx_error}")
-                            raise partition_error
-                    elif url.lower().endswith('.pdf'):
+                            elements = partition(temp_file_path)
+                            logger.debug(f"Used general partition as fallback with {len(elements)} elements")
+                        except Exception as general_error:
+                            logger.error(f"General partition also failed: {general_error}")
+                            raise docx_error
+                            
+                elif file_extension == 'pdf':
+                    try:
+                        from unstructured.partition.pdf import partition_pdf
+                        elements = partition_pdf(temp_file_path)
+                        logger.debug(f"Successfully used pdf-specific partition with {len(elements)} elements")
+                    except ImportError as import_error:
+                        logger.warning(f"PDF partition not available: {import_error}")
+                        # Fall back to general partition
+                        elements = partition(temp_file_path)
+                        logger.debug(f"Used general partition as fallback with {len(elements)} elements")
+                    except Exception as pdf_error:
+                        logger.error(f"PDF-specific partition failed: {pdf_error}")
+                        # Fall back to general partition
                         try:
-                            from unstructured.partition.pdf import partition_pdf
-                            elements = partition_pdf(temp_file_path)
-                            logger.debug("Successfully used pdf-specific partition")
-                        except Exception as pdf_error:
-                            logger.error(f"PDF partition failed: {pdf_error}")
-                            raise partition_error
-                    else:
+                            elements = partition(temp_file_path)
+                            logger.debug(f"Used general partition as fallback with {len(elements)} elements")
+                        except Exception as general_error:
+                            logger.error(f"General partition also failed: {general_error}")
+                            raise pdf_error
+                            
+                else:
+                    # Use general partition for other file types
+                    try:
+                        elements = partition(temp_file_path)
+                        logger.debug(f"Successfully partitioned document with {len(elements)} elements")
+                    except Exception as partition_error:
+                        logger.error(f"Partition failed for {url}: {partition_error}")
                         raise partition_error
                 
                 # Extract text from elements
@@ -485,15 +561,16 @@ class FileProcessor:
             logger.error(f"Failed to write to dead letter queue: {e}")
 
 # Convenience function for processing attachments
-async def process_attachments(attachment_urls: List[str]) -> List[str]:
+async def process_attachments(attachment_urls: List[str], return_ids: bool = False) -> Union[List[str], Dict[str, Any]]:
     """
     Process attachment URLs and return extracted text.
     
     Args:
         attachment_urls: List of attachment URLs
+        return_ids: If True, return dict with texts and attachment_ids for v6.1 traceability
         
     Returns:
-        List of extracted text content
+        List of extracted text content (legacy) or dict with texts and attachment_ids (v6.1)
     """
     async with FileProcessor() as processor:
-        return await processor.process_attachments(attachment_urls) 
+        return await processor.process_attachments(attachment_urls, return_ids) 

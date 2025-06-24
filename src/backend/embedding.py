@@ -74,30 +74,72 @@ class EmbeddingManager:
         try:
             logger.info(f"Generating embeddings for {len(chunks)} chunks")
             
-            # Process chunks in batches to avoid rate limits
-            batch_size = 100
+            # Process chunks in smaller batches to avoid rate limits
+            batch_size = 50  # Reduced from 100 to be more conservative
             all_embeddings = []
             
             for i in range(0, len(chunks), batch_size):
                 batch = chunks[i:i + batch_size]
+                batch_num = i // batch_size + 1
+                total_batches = (len(chunks) + batch_size - 1) // batch_size
                 
-                response = await self.openai_client.embeddings.create(
-                    model=self.embedding_model,
-                    input=batch
-                )
-                
-                batch_embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(batch_embeddings)
-                
-                # Small delay to respect rate limits
-                if i + batch_size < len(chunks):
-                    await asyncio.sleep(0.1)
+                try:
+                    logger.debug(f"Processing embedding batch {batch_num}/{total_batches} ({len(batch)} chunks)")
+                    
+                    # Filter out empty or very long chunks
+                    valid_batch = []
+                    for chunk in batch:
+                        if chunk and chunk.strip() and len(chunk) < 8000:  # OpenAI token limit safety
+                            valid_batch.append(chunk.strip())
+                    
+                    if not valid_batch:
+                        logger.warning(f"Skipping batch {batch_num} - no valid chunks")
+                        continue
+                    
+                    response = await self.openai_client.embeddings.create(
+                        model=self.embedding_model,
+                        input=valid_batch
+                    )
+                    
+                    batch_embeddings = [item.embedding for item in response.data]
+                    all_embeddings.extend(batch_embeddings)
+                    
+                    logger.debug(f"Successfully processed batch {batch_num}/{total_batches}")
+                    
+                    # Progressive delay to respect rate limits
+                    if i + batch_size < len(chunks):
+                        delay = min(0.5 + (batch_num * 0.1), 2.0)  # Increase delay for larger batches
+                        await asyncio.sleep(delay)
+                        
+                except Exception as batch_error:
+                    logger.error(f"Failed to process embedding batch {batch_num}: {batch_error}")
+                    # For rate limit errors, wait longer and retry once
+                    if "rate_limit" in str(batch_error).lower() or "429" in str(batch_error):
+                        logger.warning(f"Rate limit hit on batch {batch_num}, waiting 10 seconds...")
+                        await asyncio.sleep(10)
+                        try:
+                            # Retry the batch once
+                            response = await self.openai_client.embeddings.create(
+                                model=self.embedding_model,
+                                input=valid_batch
+                            )
+                            batch_embeddings = [item.embedding for item in response.data]
+                            all_embeddings.extend(batch_embeddings)
+                            logger.info(f"Successfully retried batch {batch_num} after rate limit")
+                        except Exception as retry_error:
+                            logger.error(f"Retry failed for batch {batch_num}: {retry_error}")
+                            raise batch_error  # Re-raise original error
+                    else:
+                        raise batch_error
             
             logger.info(f"Generated {len(all_embeddings)} embeddings")
             return all_embeddings
             
         except Exception as e:
             logger.error(f"Failed to generate embeddings: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            if hasattr(e, 'response'):
+                logger.error(f"Response status: {getattr(e.response, 'status_code', 'unknown')}")
             raise
     
     def store_embeddings(self, embeddings: List[List[float]], metadatas: List[Dict[str, Any]]):

@@ -14,7 +14,7 @@ load_dotenv()
 logger = get_logger(__name__)
 
 class LLMClient:
-    """Enhanced LLM client with conversational memory and role adaptation."""
+    """Enhanced LLM client with conversational memory, role adaptation, and v6.1 observability."""
     
     def __init__(self):
         self.client = AsyncOpenAI(
@@ -24,12 +24,28 @@ class LLMClient:
         
         # Conversational memory cache (TTL = 1 hour)
         self.conversation_cache = TTLCache(maxsize=1000, ttl=3600)
+        
+        # v6.1: Track usage for observability
+        self.track_usage = True
+    
+    def _track_llm_usage(self, model: str, tokens: int, operation: str):
+        """Track LLM usage if observability is enabled."""
+        if self.track_usage:
+            try:
+                # Import here to avoid circular imports
+                from .api import track_llm_usage
+                track_llm_usage(model, tokens, operation)
+            except ImportError:
+                # Fallback logging if metrics not available
+                logger.debug(f"LLM usage: {model} used {tokens} tokens for {operation}")
     
     @retry_on_api_error(max_attempts=3, min_wait=1.0, max_wait=30.0)
     async def generate_answer(self, question: str, context_documents: List[Dict], 
                             user_id: str = None, user_roles: List[str] = None) -> Dict[str, Any]:
         """
         Generate an answer using the RAG pipeline with retry logic, conversational memory, and role adaptation.
+        
+        v6.1: Enhanced with token usage tracking for observability.
         
         Args:
             question: User's question
@@ -70,8 +86,20 @@ class LLMClient:
             
             answer = response.choices[0].message.content.strip()
             
+            # v6.1: Track token usage
+            if response.usage:
+                total_tokens = response.usage.total_tokens
+                self._track_llm_usage(self.chat_model, total_tokens, "generate_answer")
+            
             # Calculate confidence based on context relevance
             confidence = self._calculate_confidence(context_documents)
+            
+            # v6.1: Track confidence metrics
+            try:
+                from .api import vita_query_confidence
+                vita_query_confidence.observe(confidence)
+            except ImportError:
+                pass
             
             # Save conversation to memory
             if user_id:

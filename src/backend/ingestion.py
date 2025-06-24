@@ -1,5 +1,6 @@
 import asyncio
 import json
+import hashlib
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from .schemas import IngestRequest
@@ -39,6 +40,25 @@ def mark_processed(message_id: str, channel_id: str = None, user_id: str = None)
     """
     vita_db.mark_message_processed(message_id, channel_id, user_id)
 
+def compute_content_hash(content: str, attachment_ids: List[str] = None) -> str:
+    """
+    Compute SHA-256 hash of content combined with sorted attachment IDs.
+    
+    Args:
+        content: Cleaned text content
+        attachment_ids: List of attachment IDs (SHA-256 hashes)
+        
+    Returns:
+        SHA-256 hash string
+    """
+    # Combine content with sorted attachment IDs for consistent hashing
+    hash_input = content
+    if attachment_ids:
+        sorted_attachments = sorted(attachment_ids)
+        hash_input += "|attachments:" + ",".join(sorted_attachments)
+    
+    return hashlib.sha256(hash_input.encode('utf-8')).hexdigest()
+
 async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None, channel_name: Optional[str] = None):
     """
     Run the complete ingestion pipeline for a message.
@@ -70,6 +90,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
         
         # Collect all content
         all_content = []
+        attachment_ids = []  # v6.1: Track attachment IDs for duplicate detection
         
         # Add message content if present
         if req.content and req.content.strip():
@@ -84,8 +105,19 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             log_details.append(f"Processing {len(req.attachments)} attachments")
             logger.info(f"Processing {len(req.attachments)} attachments for message {req.message_id}")
             try:
-                attachment_texts = await process_attachments(req.attachments)
+                # v6.1: Get both text content and attachment IDs
+                attachment_data = await process_attachments(req.attachments, return_ids=True)
                 processed_attachments = 0
+                
+                if isinstance(attachment_data, dict):
+                    # New format with attachment IDs
+                    attachment_texts = attachment_data.get('texts', [])
+                    attachment_ids = attachment_data.get('attachment_ids', [])
+                else:
+                    # Fallback to old format
+                    attachment_texts = attachment_data
+                    attachment_ids = []
+                
                 for text in attachment_texts:
                     if text and text.strip():
                         cleaned_text_content = clean_text(text)
@@ -117,6 +149,29 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
         combined_content = "\n\n".join(all_content)
         log_details.append(f"Combined content length: {len(combined_content)} characters")
         logger.info(f"Message {req.message_id}: Combined and cleaned content length: {len(combined_content)}")
+        
+        # v6.1: Compute content hash for duplicate detection
+        content_hash = compute_content_hash(combined_content, attachment_ids)
+        log_details.append(f"Computed content hash: {content_hash[:8]}...")
+        
+        # v6.1: Check for duplicate content
+        if vita_db.check_content_duplicate(content_hash):
+            log_details.append(f"DUPLICATE: Content hash {content_hash[:8]}... already exists")
+            logger.info(f"Message {req.message_id}: Duplicate content detected (hash: {content_hash[:8]}...)")
+            
+            if batch_id:
+                progress_tracker.add_log(
+                    batch_id, req.message_id, "DUPLICATE", 
+                    log_details, channel_name, f"Duplicate content hash: {content_hash[:8]}..."
+                )
+            
+            # Mark as processed with hash but don't re-ingest
+            try:
+                vita_db.mark_message_processed_with_hash(req.message_id, content_hash, req.channel_id, req.user_id)
+            except Exception as e:
+                logger.warning(f"Failed to mark duplicate message {req.message_id}: {e}")
+            
+            return
         
         # Split content into chunks
         chunks = split_text_for_embedding(combined_content)
@@ -175,7 +230,10 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
                 "content": chunk,
                 "timestamp": req.timestamp.isoformat() if isinstance(req.timestamp, datetime) else str(req.timestamp),
                 "chunk_index": i,
-                "total_chunks": len(chunks)
+                "total_chunks": len(chunks),
+                # v6.1: Add content hash and attachment IDs for traceability
+                "content_hash": content_hash,
+                "attachment_ids": attachment_ids if attachment_ids else []
             }
             
             # Add optional fields
@@ -225,11 +283,11 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             else:
                 logger.warning(f"Ontology enhancement failed for message {req.message_id}: {ontology_error}")
                 log_details.append(f"Ontology enhancement failed: {str(ontology_error)}")
-            # Don't fail the entire ingestion if ontology enhancement fails
+                # Don't fail the entire ingestion if ontology enhancement fails
         
-        # Mark as processed
-        mark_processed(req.message_id, req.channel_id, req.user_id)
-        log_details.append("Successfully marked as processed")
+        # Mark as processed with content hash
+        vita_db.mark_message_processed_with_hash(req.message_id, content_hash, req.channel_id, req.user_id)
+        log_details.append("Successfully marked as processed with content hash")
         
         # Update progress tracker
         if batch_id:
@@ -315,7 +373,7 @@ async def _enhance_with_ontology_and_graph(message_id: str, content: str, log_de
     """
     Enhance message with ontology tagging and knowledge graph updates.
     
-    This is the core intelligence upgrade that makes VITA understand business context.
+    v6.1: Enhanced with confidence scoring and gating for high-quality graph data.
     
     Args:
         message_id: Discord message ID
@@ -325,18 +383,37 @@ async def _enhance_with_ontology_and_graph(message_id: str, content: str, log_de
     try:
         logger.debug(f"Starting ontology enhancement for message {message_id}")
         
-        # Step 1: Ontology Tagging
+        # Step 1: Ontology Tagging with Confidence Scoring
         ontology_prompt = ontology_manager.create_ontology_prompt(content)
         if not ontology_prompt.strip():
             log_details.append("Skipped ontology tagging - no concepts defined")
             return
         
+        # v6.1: Updated prompt to require confidence scores
+        enhanced_prompt = ontology_prompt + """
+
+IMPORTANT: For each concept you identify, you MUST include a confidence score (0.0 to 1.0) indicating how certain you are about:
+1. The entity being correctly identified in the text
+2. The entity being a legitimate business concept (not generic terms)
+3. The entity belonging to the specified concept category
+
+Response format (REQUIRED):
+{
+    "concepts": [
+        {"concept": "Project", "entity": "Project Phoenix", "confidence": 0.95},
+        {"concept": "Person", "entity": "John Doe", "confidence": 0.88}
+    ]
+}
+
+Only include entities with confidence >= 0.5. Be conservative with scoring.
+"""
+        
         # Call LLM for ontology tagging
         tag_response = await llm_client.client.chat.completions.create(
             model=llm_client.chat_model,
             messages=[
-                {"role": "system", "content": "You are an expert business analyst who identifies and extracts business concepts from text. Always respond with valid JSON."},
-                {"role": "user", "content": ontology_prompt}
+                {"role": "system", "content": "You are an expert business analyst who identifies and extracts business concepts from text with confidence scoring. Always respond with valid JSON including confidence scores."},
+                {"role": "user", "content": enhanced_prompt}
             ],
             temperature=0.1,
             max_tokens=1000
@@ -358,38 +435,71 @@ async def _enhance_with_ontology_and_graph(message_id: str, content: str, log_de
             log_details.append("No ontology concepts identified")
             return
         
-        # Step 2: Create/Update Knowledge Graph Nodes
-        node_ids = {}
+        # v6.1: Separate high-confidence entities for knowledge graph vs all entities for vector storage
+        high_confidence_entities = []
+        all_entities = []
+        confidence_threshold = 0.75  # High threshold for knowledge graph
+        
         for entity in entities:
-            if entity.get('confidence', 0) > 0.7:
-                try:
-                    node_id = vita_db.create_or_get_node(
-                        label=entity['concept'],
-                        name=entity['entity'],
-                        metadata={
-                            'confidence': entity.get('confidence', 0.8),
-                            'first_mentioned_message': message_id,
-                            'source': 'ontology_extraction'
-                        }
-                    )
-                    node_ids[entity['entity']] = node_id
-                    logger.debug(f"Created/updated node for {entity['concept']}:{entity['entity']}")
-                except Exception as e:
-                    logger.warning(f"Failed to create node for {entity['entity']}: {e}")
+            confidence = entity.get('confidence', 0.0)
+            all_entities.append(entity)  # Store all entities in vector metadata
+            
+            if confidence >= confidence_threshold:
+                high_confidence_entities.append(entity)
+                logger.debug(f"High-confidence entity: {entity['concept']}:{entity['entity']} (conf: {confidence})")
+            else:
+                logger.debug(f"Low-confidence entity (vector only): {entity['concept']}:{entity['entity']} (conf: {confidence})")
         
-        log_details.append(f"Identified {len(entities)} concepts, created {len(node_ids)} graph nodes")
+        log_details.append(f"Identified {len(entities)} concepts total, {len(high_confidence_entities)} high-confidence for graph")
         
-        # Step 3: Relationship Extraction (only if we have multiple entities)
-        if len(entities) >= 2:
-            relationship_prompt = ontology_manager.create_relationship_prompt(content, entities)
+        # Step 2: Create/Update Knowledge Graph Nodes (only high-confidence)
+        node_ids = {}
+        for entity in high_confidence_entities:
+            try:
+                node_id = vita_db.create_or_get_node(
+                    label=entity['concept'],
+                    name=entity['entity'],
+                    metadata={
+                        'confidence': entity.get('confidence', 0.8),
+                        'first_mentioned_message': message_id,
+                        'source': 'ontology_extraction_v6.1',
+                        'confidence_threshold': confidence_threshold
+                    }
+                )
+                node_ids[entity['entity']] = node_id
+                logger.debug(f"Created/updated high-confidence node for {entity['concept']}:{entity['entity']}")
+            except Exception as e:
+                logger.warning(f"Failed to create node for {entity['entity']}: {e}")
+        
+        # Step 3: Relationship Extraction with Confidence Scoring (only if we have multiple high-confidence entities)
+        if len(high_confidence_entities) >= 2:
+            relationship_prompt = ontology_manager.create_relationship_prompt(content, high_confidence_entities)
             if relationship_prompt.strip():
                 try:
+                    # v6.1: Enhanced relationship prompt with confidence requirements
+                    enhanced_rel_prompt = relationship_prompt + """
+
+IMPORTANT: For each relationship you identify, you MUST include a confidence score (0.0 to 1.0) indicating how certain you are about:
+1. The relationship being explicitly or implicitly stated in the text
+2. The relationship being meaningful and not coincidental
+3. The relationship type being correctly identified
+
+Response format (REQUIRED):
+{
+    "relationships": [
+        {"source": "John Doe", "relationship": "manages", "target": "Project Phoenix", "confidence": 0.92}
+    ]
+}
+
+Only include relationships with confidence >= 0.5. Be conservative with scoring.
+"""
+                    
                     # Call LLM for relationship extraction
                     rel_response = await llm_client.client.chat.completions.create(
                         model=llm_client.chat_model,
                         messages=[
-                            {"role": "system", "content": "You are an expert business analyst who identifies relationships between business entities. Always respond with valid JSON."},
-                            {"role": "user", "content": relationship_prompt}
+                            {"role": "system", "content": "You are an expert business analyst who identifies relationships between business entities with confidence scoring. Always respond with valid JSON including confidence scores."},
+                            {"role": "user", "content": enhanced_rel_prompt}
                         ],
                         temperature=0.1,
                         max_tokens=800
@@ -406,10 +516,13 @@ async def _enhance_with_ontology_and_graph(message_id: str, content: str, log_de
                         logger.warning(f"Failed to parse relationship extraction JSON for message {message_id}")
                         relationships = []
                     
-                    # Step 4: Create Graph Edges
+                    # Step 4: Create Graph Edges (only high-confidence relationships)
                     edges_created = 0
+                    rel_confidence_threshold = 0.75  # High threshold for relationships
+                    
                     for relationship in relationships:
-                        if relationship.get('confidence', 0) > 0.7:
+                        confidence = relationship.get('confidence', 0.0)
+                        if confidence >= rel_confidence_threshold:
                             source_name = relationship.get('source', '')
                             target_name = relationship.get('target', '')
                             rel_type = relationship.get('relationship', '')
@@ -421,25 +534,33 @@ async def _enhance_with_ontology_and_graph(message_id: str, content: str, log_de
                                         target_id=node_ids[target_name],
                                         relationship=rel_type,
                                         metadata={
-                                            'confidence': relationship.get('confidence', 0.8),
+                                            'confidence': confidence,
                                             'source_message': message_id,
-                                            'extraction_method': 'llm_analysis'
+                                            'extraction_method': 'llm_analysis_v6.1',
+                                            'confidence_threshold': rel_confidence_threshold
                                         },
                                         message_id=message_id
                                     )
                                     edges_created += 1
-                                    logger.debug(f"Created relationship: {source_name} -{rel_type}-> {target_name}")
+                                    logger.debug(f"Created high-confidence relationship: {source_name} -{rel_type}-> {target_name} (conf: {confidence})")
                                 except Exception as e:
                                     logger.warning(f"Failed to create relationship edge: {e}")
+                            else:
+                                logger.debug(f"Skipping relationship - entities not in high-confidence graph: {source_name} -> {target_name}")
+                        else:
+                            logger.debug(f"Low-confidence relationship skipped: {relationship.get('source', '')} -> {relationship.get('target', '')} (conf: {confidence})")
                     
-                    log_details.append(f"Created {edges_created} relationship edges in knowledge graph")
+                    log_details.append(f"Created {edges_created} high-confidence relationship edges in knowledge graph")
                     
                 except Exception as e:
                     logger.warning(f"Relationship extraction failed for message {message_id}: {e}")
                     log_details.append(f"Relationship extraction failed: {str(e)}")
         
-        log_details.append("Ontology enhancement completed successfully")
-        logger.info(f"Successfully enhanced message {message_id} with ontology and graph data")
+        # v6.1: Store ALL entities (regardless of confidence) in vector metadata for discoverability
+        # This will be handled in the metadata creation section of run_ingestion_task
+        
+        log_details.append("v6.1 Ontology enhancement completed with confidence gating")
+        logger.info(f"Successfully enhanced message {message_id} with v6.1 ontology and graph data (confidence gating applied)")
         
     except Exception as e:
         logger.error(f"Ontology enhancement failed for message {message_id}: {e}")

@@ -1,11 +1,8 @@
 import os
 from typing import List
-from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Header
 from fastapi.security import HTTPBearer
-from fastapi.middleware.base import BaseHTTPMiddleware
 from dotenv import load_dotenv
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter, Histogram, Gauge
 from .schemas import IngestRequest, QueryRequest, QueryResponse, BatchIngestRequest, ProgressResponse
 from .ingestion import run_ingestion_task, run_batch_ingestion_task
 from .database import vita_db, is_processed
@@ -15,119 +12,21 @@ from .permissions import permission_manager
 from .llm_client import llm_client
 from .progress_tracker import progress_tracker
 from .logger import get_logger
-from datetime import datetime
-import aiohttp
-import json
 
 # Load environment variables
 load_dotenv()
 
 logger = get_logger(__name__)
 
-# v6.1: Custom Prometheus metrics
-vita_llm_tokens_total = Counter(
-    'vita_llm_tokens_total',
-    'Total tokens used by LLM calls',
-    ['model_name', 'operation']
-)
-
-vita_estimated_cost_usd_total = Counter(
-    'vita_estimated_cost_usd_total',
-    'Total estimated cost in USD for LLM calls',
-    ['model_name']
-)
-
-vita_knowledge_graph_nodes_total = Gauge(
-    'vita_knowledge_graph_nodes_total',
-    'Total number of nodes in knowledge graph'
-)
-
-vita_vector_count_total = Gauge(
-    'vita_vector_count_total',
-    'Total number of vectors in Pinecone'
-)
-
-vita_query_confidence = Histogram(
-    'vita_query_confidence',
-    'Distribution of query confidence scores',
-    buckets=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-)
-
-# v6.1: Token Budget Guard Middleware
-class TokenBudgetMiddleware(BaseHTTPMiddleware):
-    """Middleware to enforce monthly token budget limits."""
-    
-    def __init__(self, app):
-        super().__init__(app)
-        self.monthly_budget = float(os.getenv("MONTHLY_BUDGET_USD", "100.0"))
-        self.llm_endpoints = ["/query", "/debug/query"]
-    
-    async def dispatch(self, request: Request, call_next):
-        # Check if this is an LLM endpoint
-        if request.url.path in self.llm_endpoints:
-            current_cost = vita_estimated_cost_usd_total._value._value
-            
-            if current_cost >= self.monthly_budget:
-                logger.warning(f"Monthly budget exceeded: ${current_cost:.2f} >= ${self.monthly_budget}")
-                return HTTPException(
-                    status_code=429,
-                    detail=f"Monthly budget exceeded (${current_cost:.2f}/${self.monthly_budget}). Contact administrator."
-                )
-        
-        response = await call_next(request)
-        return response
-
 # Initialize FastAPI app
 app = FastAPI(
-    title="VITA Discord AI Knowledge Assistant v6.1",
-    description="Production-grade backend API for Discord AI knowledge management",
-    version="6.1.0"
+    title="VITA Discord AI Knowledge Assistant",
+    description="Backend API for Discord AI knowledge management",
+    version="1.0.0"
 )
-
-# v6.1: Add Prometheus instrumentation
-instrumentator = Instrumentator()
-instrumentator.instrument(app).expose(app)
-
-# v6.1: Add budget middleware
-app.add_middleware(TokenBudgetMiddleware)
 
 # Security
 security = HTTPBearer()
-
-def track_llm_usage(model: str, tokens: int, operation: str):
-    """Track LLM token usage and estimated costs."""
-    vita_llm_tokens_total.labels(model_name=model, operation=operation).inc(tokens)
-    
-    # Estimate cost based on model pricing (approximate)
-    cost_per_1k_tokens = {
-        "gpt-4o": 0.03,
-        "gpt-4o-mini": 0.0015,
-        "text-embedding-3-small": 0.0001
-    }
-    
-    cost_estimate = (tokens / 1000) * cost_per_1k_tokens.get(model, 0.01)
-    vita_estimated_cost_usd_total.labels(model_name=model).inc(cost_estimate)
-    
-    logger.debug(f"LLM usage tracked: {model} used {tokens} tokens (${cost_estimate:.4f}) for {operation}")
-
-def update_metrics():
-    """Update gauge metrics with current system state."""
-    try:
-        # Update knowledge graph node count
-        with vita_db.get_session() as session:
-            node_count = session.query(vita_db.GraphNode).filter(vita_db.GraphNode.status == 'active').count()
-            vita_knowledge_graph_nodes_total.set(node_count)
-        
-        # Update vector count (approximate from Pinecone stats)
-        try:
-            stats = embedding_manager.index.describe_index_stats()
-            vector_count = stats.get('total_vector_count', 0)
-            vita_vector_count_total.set(vector_count)
-        except Exception as e:
-            logger.warning(f"Failed to update vector count metric: {e}")
-            
-    except Exception as e:
-        logger.error(f"Failed to update metrics: {e}")
 
 async def verify_api_key(x_api_key: str = Header(...)):
     """
@@ -519,15 +418,15 @@ async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
                     "score": doc.get("score", 0.0)
                 })
             
-            llm_result = await llm_client.generate_answer(
+                llm_result = await llm_client.generate_answer(
                 question=request.question,
                 context_documents=context_docs,
                 user_id=request.user_id,
                 user_roles=request.roles
             )
-            
-            return QueryResponse(
-                answer=llm_result["answer"],
+        
+        return QueryResponse(
+                        answer=llm_result["answer"],
                 citations=citations,
                 confidence=llm_result["confidence"]
             )
@@ -563,8 +462,6 @@ async def _generate_reasoning_plan(question: str, roles: list = None) -> str:
     """
     Generate a multi-step reasoning plan for complex queries.
     
-    v6.1: Uses cost-effective model for planning to save on costs.
-    
     Args:
         question: User's question
         roles: User's roles for context
@@ -582,9 +479,6 @@ Instructions:
 2. If multi-hop, break down into logical steps
 3. Identify what types of evidence would be needed for each step
 4. Consider dependencies between steps
-5. Determine if any step requires precise graph query (use "graph_query" tool)
-
-v6.1: If a step needs to query relationships or find connected entities, mark it as requiring "graph_query" tool.
 
 Format your response as JSON:
 {{
@@ -594,8 +488,6 @@ Format your response as JSON:
             "step_number": 1,
             "description": "What to find/verify",
             "evidence_type": "documents|knowledge_graph|both",
-            "requires_tool": "graph_query|none",
-            "tool_query": {{"match": {{"source": {{"label": "Person", "name": "John Doe"}}, "edge": {{"relationship": "manages"}}, "target": {{"label": "Project"}}}}, "return": ["target.name"]}},
             "depends_on": []
         }}
     ],
@@ -603,21 +495,17 @@ Format your response as JSON:
 }}
 """
         
-        # v6.1: Use cost-effective model for planning
         response = await llm_client.client.chat.completions.create(
-            model="gpt-4o-mini",  # Cost-effective model for planning
+            model=llm_client.chat_model,
             messages=[
-                {"role": "system", "content": "You are an expert query planner who creates structured reasoning plans. Always respond with valid JSON."},
+                {"role": "system", "content": "You are an expert query planner who creates structured reasoning plans."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.1,
-            max_tokens=800
+            max_tokens=500
         )
         
-        plan_text = response.choices[0].message.content.strip()
-        logger.info(f"Generated reasoning plan using cost-effective model: {plan_text[:100]}...")
-        
-        return plan_text
+        return response.choices[0].message.content.strip()
         
     except Exception as e:
         logger.error(f"Failed to generate reasoning plan: {e}")
@@ -625,7 +513,7 @@ Format your response as JSON:
         import json
         return json.dumps({
             "complexity": "simple",
-            "steps": [{"step_number": 1, "description": "Direct search", "evidence_type": "documents", "requires_tool": "none", "depends_on": []}],
+            "steps": [{"step_number": 1, "description": "Direct search", "evidence_type": "documents", "depends_on": []}],
             "expected_evidence_types": ["message_content"]
         })
 
@@ -714,8 +602,6 @@ async def _execute_reasoning_step(step: dict, original_question: str,
     """
     Execute a single reasoning step.
     
-    v6.1: Enhanced with tool-calling capability for graph queries.
-    
     Args:
         step: Step definition from reasoning plan
         original_question: Original user question
@@ -727,56 +613,10 @@ async def _execute_reasoning_step(step: dict, original_question: str,
     """
     try:
         evidence_type = step.get("evidence_type", "documents")
-        requires_tool = step.get("requires_tool", "none")
         step_query = f"{step['description']} (related to: {original_question})"
         
         documents = []
         citations = []
-        
-        # v6.1: Handle tool-calling for graph queries
-        if requires_tool == "graph_query" and step.get("tool_query"):
-            try:
-                logger.info(f"Executing graph query tool for step {step.get('step_number', 'unknown')}")
-                
-                # Call the graph-query endpoint internally
-                backend_url = "http://localhost:8000"  # Internal call
-                api_key = os.getenv("BACKEND_API_KEY")
-                
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                        f"{backend_url}/graph-query",
-                        json=step["tool_query"],
-                        headers={"X-API-Key": api_key}
-                    ) as response:
-                        if response.status == 200:
-                            graph_results = await response.json()
-                            
-                            # Convert graph results to citations format
-                            for result in graph_results.get("results", []):
-                                citation = {
-                                    "message_id": f"graph_query_{step.get('step_number', '')}",
-                                    "channel_id": "knowledge_graph",
-                                    "user_id": "graph_system",
-                                    "timestamp": datetime.utcnow().isoformat(),
-                                    "content_preview": f"Graph data: {json.dumps(result)}",
-                                    "score": 1.0,
-                                    "reasoning_step": step["step_number"],
-                                    "source_type": "knowledge_graph"
-                                }
-                                citations.append(citation)
-                                evidence_data["kg_nodes"].append({
-                                    "result": result,
-                                    "step": step["step_number"],
-                                    "tool_query": step["tool_query"]
-                                })
-                            
-                            logger.info(f"Graph query returned {len(graph_results.get('results', []))} results")
-                        else:
-                            logger.warning(f"Graph query failed with status {response.status}")
-                            
-            except Exception as tool_error:
-                logger.error(f"Graph query tool failed: {tool_error}")
-                # Continue with document search as fallback
         
         if evidence_type in ["documents", "both"]:
             # Search vector database
@@ -795,23 +635,21 @@ async def _execute_reasoning_step(step: dict, original_question: str,
                     "timestamp": metadata.get("timestamp", ""),
                     "content_preview": metadata.get("content", "")[:200] + "..." if len(metadata.get("content", "")) > 200 else metadata.get("content", ""),
                     "score": doc.get("score", 0.0),
-                    "reasoning_step": step["step_number"],
-                    "source_type": "vector_search"
+                    "reasoning_step": step["step_number"]
                 }
                 citations.append(citation)
                 documents.append(doc)
                 evidence_data["retrieved_docs"].append(citation)
         
-        if evidence_type in ["knowledge_graph", "both"] and requires_tool != "graph_query":
-            # Legacy graph search for non-tool steps
+        if evidence_type in ["knowledge_graph", "both"]:
+            # Search knowledge graph for relevant nodes
             kg_nodes = vita_db.get_active_nodes()  # Could be enhanced with semantic search
             for node in kg_nodes[:3]:  # Limit to top 3 for now
                 evidence_data["kg_nodes"].append({
                     "node_id": node.id,
                     "label": node.label,
                     "name": node.name,
-                    "step": step["step_number"],
-                    "source_type": "legacy_graph_search"
+                    "step": step["step_number"]
                 })
         
         return {
@@ -1694,220 +1532,6 @@ async def detect_knowledge_supersession(
     except Exception as e:
         logger.error(f"Failed to detect knowledge supersession: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to detect knowledge supersession: {str(e)}")
-
-@app.post("/graph-query")
-async def graph_query(
-    request: dict,
-    _: bool = Depends(verify_api_key)
-):
-    """
-    v6.1: GraphQL-lite endpoint for structured graph queries.
-    
-    Accepts JSON payload with graph traversal specifications and returns precise results.
-    
-    Args:
-        request: JSON payload with graph query specification
-        
-    Returns:
-        Query results based on the specified traversal
-    """
-    try:
-        logger.info("Processing GraphQL-lite query")
-        
-        # Validate request structure
-        if not isinstance(request, dict):
-            raise HTTPException(status_code=400, detail="Request must be a JSON object")
-        
-        # Parse query specification
-        match = request.get("match", {})
-        return_fields = request.get("return", ["target.name"])
-        limit = request.get("limit", 50)
-        
-        if not match:
-            raise HTTPException(status_code=400, detail="Query must include 'match' specification")
-        
-        # Build SQL query from JSON specification
-        sql_query, params = _build_graph_sql_query(match, return_fields, limit)
-        
-        # Execute query
-        with vita_db.get_session() as session:
-            result = session.execute(sql_query, params)
-            rows = result.fetchall()
-            
-            # Format results
-            results = []
-            for row in rows:
-                result_obj = {}
-                for i, field in enumerate(return_fields):
-                    result_obj[field] = row[i]
-                results.append(result_obj)
-        
-        logger.info(f"GraphQL-lite query returned {len(results)} results")
-        
-        return {
-            "results": results,
-            "count": len(results),
-            "query": {
-                "match": match,
-                "return": return_fields,
-                "limit": limit
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"GraphQL-lite query failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Graph query failed: {str(e)}")
-
-def _build_graph_sql_query(match: dict, return_fields: list, limit: int) -> tuple:
-    """
-    Build SQL query from GraphQL-lite JSON specification.
-    
-    Args:
-        match: Match specification dictionary
-        return_fields: List of fields to return
-        limit: Result limit
-        
-    Returns:
-        Tuple of (sql_query, parameters)
-    """
-    from sqlalchemy import text
-    
-    # Parse match specification
-    source = match.get("source", {})
-    edge = match.get("edge", {})
-    target = match.get("target", {})
-    
-    # Build JOIN query
-    query_parts = []
-    params = {}
-    
-    # Base tables
-    query_parts.append("SELECT")
-    
-    # Build SELECT clause
-    select_parts = []
-    for field in return_fields:
-        if field.startswith("source."):
-            column = field.replace("source.", "")
-            if column in ["id", "label", "name", "status"]:
-                select_parts.append(f"source_node.{column} as source_{column}")
-        elif field.startswith("target."):
-            column = field.replace("target.", "")
-            if column in ["id", "label", "name", "status"]:
-                select_parts.append(f"target_node.{column} as target_{column}")
-        elif field.startswith("edge."):
-            column = field.replace("edge.", "")
-            if column in ["id", "relationship", "created_at"]:
-                select_parts.append(f"edge.{column} as edge_{column}")
-    
-    if not select_parts:
-        select_parts = ["target_node.name as target_name"]
-    
-    query_parts.append(", ".join(select_parts))
-    
-    # FROM clause with JOINs
-    query_parts.append("""
-        FROM graph_edges edge
-        JOIN graph_nodes source_node ON edge.source_id = source_node.id
-        JOIN graph_nodes target_node ON edge.target_id = target_node.id
-    """)
-    
-    # WHERE clause
-    where_conditions = []
-    
-    # Source node conditions
-    if source.get("label"):
-        where_conditions.append("source_node.label = :source_label")
-        params["source_label"] = source["label"]
-    
-    if source.get("name"):
-        where_conditions.append("source_node.name = :source_name")
-        params["source_name"] = source["name"]
-    
-    if source.get("status"):
-        where_conditions.append("source_node.status = :source_status")
-        params["source_status"] = source["status"]
-    
-    # Edge conditions
-    if edge.get("relationship"):
-        where_conditions.append("edge.relationship = :edge_relationship")
-        params["edge_relationship"] = edge["relationship"]
-    
-    # Target node conditions
-    if target.get("label"):
-        where_conditions.append("target_node.label = :target_label")
-        params["target_label"] = target["label"]
-    
-    if target.get("name"):
-        where_conditions.append("target_node.name LIKE :target_name")
-        params["target_name"] = f"%{target['name']}%"
-    
-    if target.get("status"):
-        where_conditions.append("target_node.status = :target_status")
-        params["target_status"] = target["status"]
-    
-    # Add active status filter by default
-    where_conditions.append("source_node.status = 'active'")
-    where_conditions.append("target_node.status = 'active'")
-    
-    if where_conditions:
-        query_parts.append("WHERE " + " AND ".join(where_conditions))
-    
-    # ORDER BY and LIMIT
-    query_parts.append("ORDER BY target_node.name")
-    query_parts.append(f"LIMIT {min(limit, 100)}")  # Cap at 100 results
-    
-    sql_query = text(" ".join(query_parts))
-    
-    return sql_query, params
-
-@app.post("/admin/ontology/analyze-gaps")
-async def analyze_ontology_gaps(
-    request: dict,
-    _: bool = Depends(verify_api_key)
-):
-    """
-    v6.1: Analyze knowledge gaps and propose ontology updates.
-    
-    Uses the OntologyEvolutionAgent to identify missing concepts from failed queries.
-    
-    Args:
-        request: Dictionary with analysis parameters
-        
-    Returns:
-        Analysis results with proposed ontology updates
-    """
-    try:
-        from .proactive_agents import ontology_evolution_agent
-        
-        days = request.get("days", 7)
-        
-        # Validate days parameter
-        if not isinstance(days, int) or days < 1 or days > 30:
-            raise HTTPException(
-                status_code=400,
-                detail="Days parameter must be an integer between 1 and 30"
-            )
-        
-        logger.info(f"Starting ontology gap analysis for last {days} days")
-        
-        # Run the analysis
-        analysis_results = await ontology_evolution_agent.analyze_knowledge_gaps(days)
-        
-        # Update metrics after analysis
-        update_metrics()
-        
-        return {
-            "analysis": analysis_results,
-            "message": f"Ontology gap analysis completed for last {days} days",
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to analyze ontology gaps: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to analyze ontology gaps: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

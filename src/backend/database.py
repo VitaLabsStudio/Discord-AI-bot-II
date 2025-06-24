@@ -22,6 +22,8 @@ class ProcessedMessage(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
     channel_id = Column(String, index=True)
     user_id = Column(String, index=True)
+    # v6.1: Add content hash for duplicate detection
+    content_hash = Column(String, unique=True, index=True, nullable=True)
     
     def __repr__(self):
         return f"<ProcessedMessage(message_id='{self.message_id}', timestamp='{self.timestamp}')>"
@@ -133,6 +135,21 @@ class ThematicDigest(Base):
     
     def __repr__(self):
         return f"<ThematicDigest(id={self.id}, title='{self.title}')>"
+
+# v6.1: New table for attachment versioning and traceability
+class Attachment(Base):
+    """Table for tracking file attachments with versioning."""
+    __tablename__ = "attachments"
+    
+    attachment_id = Column(String, primary_key=True, index=True)  # SHA-256 hash of file content
+    original_filename = Column(String, nullable=False)
+    file_size_bytes = Column(Integer, nullable=False) 
+    mime_type = Column(String, nullable=True)
+    first_seen_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    download_url = Column(String, nullable=True)  # For reference
+    
+    def __repr__(self):
+        return f"<Attachment(attachment_id='{self.attachment_id}', filename='{self.original_filename}')>"
 
 class VitaDatabase:
     """Database manager for VITA Discord AI bot."""
@@ -826,7 +843,7 @@ class VitaDatabase:
             except Exception as e:
                 logger.error(f"Failed to get playbook feedback summary: {e}")
                 return []
-
+    
     # Conversation History Methods
     
     def save_conversation(self, user_id: str, query_text: str, answer_text: str):
@@ -947,6 +964,153 @@ class VitaDatabase:
             except Exception as e:
                 logger.error(f"Failed to get recent digests: {e}")
                 return []
+
+    # v6.1: Duplicate Guard Methods
+    
+    def check_content_duplicate(self, content_hash: str) -> bool:
+        """
+        Check if content with this hash has already been processed.
+        
+        Args:
+            content_hash: SHA-256 hash of the content
+            
+        Returns:
+            True if duplicate exists
+        """
+        with self.get_session() as session:
+            try:
+                result = session.query(ProcessedMessage).filter(
+                    ProcessedMessage.content_hash == content_hash
+                ).first()
+                return result is not None
+            except Exception as e:
+                logger.error(f"Failed to check content duplicate for hash {content_hash}: {e}")
+                return False
+    
+    def mark_message_processed_with_hash(self, message_id: str, content_hash: str, 
+                                       channel_id: str = None, user_id: str = None):
+        """
+        Mark a message as processed with content hash for duplicate detection.
+        
+        Args:
+            message_id: Discord message ID
+            content_hash: SHA-256 hash of the content
+            channel_id: Optional channel ID
+            user_id: Optional user ID
+        """
+        with self.get_session() as session:
+            try:
+                # Check if already exists
+                if self.is_message_processed(message_id):
+                    logger.debug(f"Message {message_id} already marked as processed")
+                    return
+                
+                processed_msg = ProcessedMessage(
+                    message_id=message_id,
+                    content_hash=content_hash,
+                    channel_id=channel_id,
+                    user_id=user_id
+                )
+                session.add(processed_msg)
+                session.commit()
+                logger.debug(f"Marked message {message_id} as processed with hash {content_hash[:8]}...")
+                
+            except IntegrityError as e:
+                # Content hash already exists - this is a duplicate
+                session.rollback()
+                if "content_hash" in str(e):
+                    logger.info(f"Duplicate content detected for message {message_id} (hash: {content_hash[:8]}...)")
+                else:
+                    logger.debug(f"Message {message_id} already processed (integrity error)")
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to mark message {message_id} as processed: {e}")
+                raise
+    
+    # v6.1: Attachment Management Methods
+    
+    def register_attachment(self, attachment_id: str, original_filename: str, 
+                          file_size_bytes: int, mime_type: str = None, 
+                          download_url: str = None) -> bool:
+        """
+        Register a new attachment or confirm existing one.
+        
+        Args:
+            attachment_id: SHA-256 hash of file content
+            original_filename: Original filename
+            file_size_bytes: File size in bytes
+            mime_type: MIME type of the file
+            download_url: Original download URL
+            
+        Returns:
+            True if new attachment, False if already exists
+        """
+        with self.get_session() as session:
+            try:
+                # Check if attachment already exists
+                existing = session.query(Attachment).filter(
+                    Attachment.attachment_id == attachment_id
+                ).first()
+                
+                if existing:
+                    logger.debug(f"Attachment {attachment_id[:8]}... already registered")
+                    return False
+                
+                # Register new attachment
+                attachment = Attachment(
+                    attachment_id=attachment_id,
+                    original_filename=original_filename,
+                    file_size_bytes=file_size_bytes,
+                    mime_type=mime_type,
+                    download_url=download_url
+                )
+                session.add(attachment)
+                session.commit()
+                
+                logger.info(f"Registered new attachment: {original_filename} ({attachment_id[:8]}...)")
+                return True
+                
+            except IntegrityError:
+                # Attachment already exists
+                session.rollback()
+                logger.debug(f"Attachment {attachment_id[:8]}... already exists (integrity error)")
+                return False
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to register attachment {attachment_id}: {e}")
+                raise
+    
+    def get_attachment_info(self, attachment_id: str) -> Optional[dict]:
+        """
+        Get attachment information by ID.
+        
+        Args:
+            attachment_id: SHA-256 hash of file content
+            
+        Returns:
+            Dictionary with attachment info or None
+        """
+        with self.get_session() as session:
+            try:
+                attachment = session.query(Attachment).filter(
+                    Attachment.attachment_id == attachment_id
+                ).first()
+                
+                if not attachment:
+                    return None
+                
+                return {
+                    "attachment_id": attachment.attachment_id,
+                    "original_filename": attachment.original_filename,
+                    "file_size_bytes": attachment.file_size_bytes,
+                    "mime_type": attachment.mime_type,
+                    "first_seen_at": attachment.first_seen_at.isoformat(),
+                    "download_url": attachment.download_url
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get attachment info for {attachment_id}: {e}")
+                return None
 
 # Global database instance
 vita_db = VitaDatabase()

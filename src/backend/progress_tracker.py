@@ -134,8 +134,8 @@ class ProgressTracker:
             try:
                 if batch.recent_logs:
                     batch_time = datetime.fromisoformat(batch.recent_logs[0].timestamp).timestamp()
-                    if batch_time < cutoff_time:
-                        to_remove.append(batch_id)
+                if batch_time < cutoff_time:
+                    to_remove.append(batch_id)
             except:
                 # If we can't parse time, remove it to be safe
                 to_remove.append(batch_id)
