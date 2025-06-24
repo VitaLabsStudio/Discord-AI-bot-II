@@ -18,6 +18,10 @@ from datetime import datetime
 import aiohttp
 import json
 from fastapi.responses import JSONResponse
+# v7.1: Import new context allocation system
+from .context_allocator import context_allocator
+# v7.1: Import proactive agents
+from .proactive_agents import channel_metric_agent, ontology_evolution_agent
 
 # Load environment variables
 load_dotenv()
@@ -478,9 +482,9 @@ async def _execute_enhanced_query(request: QueryRequest) -> QueryResponse:
         )
 
 async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
-    """Execute basic RAG query without v5.1 features to avoid rate limits."""
+    """Execute basic RAG query with v7.1 context allocation."""
     try:
-        logger.info(f"Executing basic RAG query for user {request.user_id}")
+        logger.info(f"Executing v7.1 enhanced RAG query for user {request.user_id}")
         
         # Create permission filter
         permission_filter = permission_manager.create_permission_filter(
@@ -488,18 +492,41 @@ async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
             request.channel_id
         )
         
-        # Do direct vector search
+        # Do direct vector search with higher top_k for better context selection
+        search_top_k = min(request.top_k * 3, 50)  # Get more candidates for smart selection
         similar_docs = await embedding_manager.query_similar(
             request.question,
-            top_k=request.top_k,
+            top_k=search_top_k,
             filter_dict=permission_filter
         )
         
-        # Generate citations with duplicate removal
+        # v7.1: Use context allocator to intelligently select content
+        user_context = {
+            'question': request.question,
+            'user_id': request.user_id,
+            'roles': request.roles,
+            'channel_id': request.channel_id
+        }
+        
+        # Convert similar docs to candidate format
+        candidates = []
+        for doc in similar_docs:
+            candidates.append({
+                'content': doc.get('content', ''),
+                'score': doc.get('score', 0.5),
+                'metadata': doc
+            })
+        
+        # Allocate context budget intelligently
+        selected_chunks = await context_allocator.allocate_context(candidates, user_context)
+        
+        logger.info(f"Context allocator selected {len(selected_chunks)} chunks from {len(candidates)} candidates")
+        
+        # Generate citations with duplicate removal from selected chunks
         citations = []
         seen_message_ids = set()
-        for doc in similar_docs:
-            metadata = doc.get("metadata", {})
+        for chunk in selected_chunks:
+            metadata = chunk.get("metadata", {})
             message_id = metadata.get("message_id", "")
             
             # Skip duplicates by message_id
@@ -507,14 +534,26 @@ async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
                 continue
             seen_message_ids.add(message_id)
             
+            # v7.1: Enhanced citation with viewpoint and relevance info
             citation = {
                 "message_id": message_id,
                 "channel_id": metadata.get("channel_id", ""),
                 "user_id": metadata.get("user_id", ""),
                 "timestamp": metadata.get("timestamp", ""),
-                "content_preview": metadata.get("content", "")[:200] + "..." if len(metadata.get("content", "")) > 200 else metadata.get("content", ""),
-                "score": doc.get("score", 0.0)
+                "content_preview": chunk.get("content", "")[:200] + "..." if len(chunk.get("content", "")) > 200 else chunk.get("content", ""),
+                "score": chunk.get("score", 0.0),
+                # v7.1: Add relevance and viewpoint metadata
+                "relevance_category": metadata.get("relevance_category", "MEDIUM"),
+                "viewpoint": metadata.get("viewpoint"),
+                "content_type": metadata.get("content_type", "original_content"),
+                "retrieval_weight": metadata.get("retrieval_weight", 1.0)
             }
+            
+            # Add Q&A specific fields if available
+            if metadata.get("qa_index") is not None:
+                citation["question"] = metadata.get("question", "")
+                citation["answer"] = metadata.get("answer", "")
+            
             citations.append(citation)
         
         if not citations:
@@ -526,13 +565,18 @@ async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
         
         # Generate answer using basic LLM call with retry logic
         try:
-            # Convert docs for LLM
+            # Convert selected chunks for LLM with enhanced metadata
             context_docs = []
-            for doc in similar_docs:
+            for chunk in selected_chunks:
                 context_docs.append({
-                    "metadata": doc.get("metadata", {}),
-                    "score": doc.get("score", 0.0)
+                    "metadata": chunk.get("metadata", {}),
+                    "score": chunk.get("score", 0.0),
+                    "content": chunk.get("content", "")
                 })
+            
+            # Track LLM token usage estimation
+            total_tokens = sum(len(chunk.get("content", "")) // 4 for chunk in selected_chunks)
+            track_llm_usage("text-embedding-3-small", total_tokens, "context_retrieval")
             
             llm_result = await llm_client.generate_answer(
                 question=request.question,
@@ -540,6 +584,9 @@ async def _execute_basic_query(request: QueryRequest) -> QueryResponse:
                 user_id=request.user_id,
                 user_roles=request.roles
             )
+            
+            # v7.1: Track query confidence for metrics
+            vita_query_confidence.observe(llm_result["confidence"])
             
             return QueryResponse(
                 answer=llm_result["answer"],
@@ -1932,14 +1979,268 @@ async def analyze_ontology_gaps(
         update_metrics()
         
         return {
-            "analysis": analysis_results,
-            "message": f"Ontology gap analysis completed for last {days} days",
-            "timestamp": datetime.utcnow().isoformat()
+            "message": "Ontology gap analysis completed",
+            "results": analysis_results
         }
         
     except Exception as e:
         logger.error(f"Failed to analyze ontology gaps: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to analyze ontology gaps: {str(e)}")
+
+# v7.1: New API endpoints for adaptive intelligence features
+
+@app.get("/v7/relevance/channel_metrics")
+async def get_channel_metrics(_: bool = Depends(verify_api_key)):
+    """Get relevance metrics for all channels."""
+    try:
+        with vita_db.get_session() as session:
+            channels = session.query(vita_db.ChannelMetrics).all()
+            
+            metrics = []
+            for channel in channels:
+                metrics.append({
+                    "channel_id": channel.channel_id,
+                    "total_messages_processed": channel.total_messages_processed,
+                    "irrelevant_messages_count": channel.irrelevant_messages_count,
+                    "dynamic_relevance_threshold": channel.dynamic_relevance_threshold,
+                    "filter_rate": channel.irrelevant_messages_count / max(1, channel.total_messages_processed),
+                    "last_updated": channel.last_updated.isoformat()
+                })
+        
+        return {
+            "channel_metrics": metrics,
+            "total_channels": len(metrics)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get channel metrics: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get channel metrics: {str(e)}")
+
+@app.post("/v7/relevance/update_thresholds")
+async def update_channel_thresholds(
+    request: dict,
+    _: bool = Depends(verify_api_key)
+):
+    """Update dynamic relevance thresholds for channels."""
+    try:
+        days = request.get("days", 7)
+        
+        results = await channel_metric_agent.update_channel_thresholds(days)
+        
+        return {
+            "message": "Channel thresholds updated",
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to update channel thresholds: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update thresholds: {str(e)}")
+
+@app.get("/v7/relevance/accuracy_analysis")
+async def get_relevance_accuracy(
+    days: int = 30,
+    _: bool = Depends(verify_api_key)
+):
+    """Get relevance classification accuracy analysis."""
+    try:
+        analysis = await channel_metric_agent.analyze_relevance_accuracy(days)
+        
+        return {
+            "message": "Relevance accuracy analysis completed",
+            "analysis": analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to analyze relevance accuracy: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to analyze accuracy: {str(e)}")
+
+@app.get("/v7/viewpoints/{message_id}")
+async def get_message_viewpoints(
+    message_id: str,
+    _: bool = Depends(verify_api_key)
+):
+    """Get all viewpoint analyses for a specific message."""
+    try:
+        viewpoints = vita_db.get_viewpoints_for_message(message_id)
+        
+        return {
+            "message_id": message_id,
+            "viewpoints": viewpoints,
+            "total_viewpoints": len(viewpoints)
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get viewpoints for message {message_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get viewpoints: {str(e)}")
+
+@app.post("/v7/query/role_specific")
+async def role_specific_query(
+    request: QueryRequest,
+    _: bool = Depends(verify_api_key)
+):
+    """Execute a role-specific query that prioritizes relevant viewpoints."""
+    try:
+        logger.info(f"Processing role-specific query from user {request.user_id} with roles {request.roles}")
+        
+        # Create enhanced user context for role-specific processing
+        user_context = {
+            'question': request.question,
+            'user_id': request.user_id,
+            'roles': request.roles,
+            'channel_id': request.channel_id,
+            'role_specific': True
+        }
+        
+        # Create permission filter
+        permission_filter = permission_manager.create_permission_filter(
+            request.roles, 
+            request.channel_id
+        )
+        
+        # Do vector search with higher top_k for better context selection
+        search_top_k = min(request.top_k * 4, 80)  # Get more candidates for role-specific selection
+        similar_docs = await embedding_manager.query_similar(
+            request.question,
+            top_k=search_top_k,
+            filter_dict=permission_filter
+        )
+        
+        # Convert to candidates and prioritize by role relevance
+        candidates = []
+        for doc in similar_docs:
+            metadata = doc.get('metadata', {})
+            
+            # Calculate role relevance boost
+            role_boost = 1.0
+            viewpoint = metadata.get('viewpoint')
+            target_roles = metadata.get('target_roles', [])
+            
+            if viewpoint and target_roles:
+                # Check if user roles match target roles
+                user_roles_lower = [role.lower() for role in request.roles]
+                target_roles_lower = [role.lower() for role in target_roles]
+                
+                if 'all' in target_roles_lower:
+                    role_boost = 1.2
+                elif any(role in target_roles_lower for role in user_roles_lower):
+                    role_boost = 1.5
+            
+            # Apply role boost to score
+            boosted_score = doc.get('score', 0.5) * role_boost
+            
+            candidates.append({
+                'content': doc.get('content', ''),
+                'score': boosted_score,
+                'metadata': metadata,
+                'role_boost': role_boost
+            })
+        
+        # Use context allocator with role-specific context
+        selected_chunks = await context_allocator.allocate_context(candidates, user_context)
+        
+        logger.info(f"Role-specific query selected {len(selected_chunks)} chunks from {len(candidates)} candidates")
+        
+        # Generate enhanced citations with role information
+        citations = []
+        seen_message_ids = set()
+        
+        for chunk in selected_chunks:
+            metadata = chunk.get("metadata", {})
+            message_id = metadata.get("message_id", "")
+            
+            if message_id and message_id in seen_message_ids:
+                continue
+            seen_message_ids.add(message_id)
+            
+            citation = {
+                "message_id": message_id,
+                "channel_id": metadata.get("channel_id", ""),
+                "user_id": metadata.get("user_id", ""),
+                "timestamp": metadata.get("timestamp", ""),
+                "content_preview": chunk.get("content", "")[:200] + "..." if len(chunk.get("content", "")) > 200 else chunk.get("content", ""),
+                "score": chunk.get("score", 0.0),
+                "relevance_category": metadata.get("relevance_category", "MEDIUM"),
+                "viewpoint": metadata.get("viewpoint"),
+                "content_type": metadata.get("content_type", "original_content"),
+                "retrieval_weight": metadata.get("retrieval_weight", 1.0),
+                "role_boost": chunk.get("role_boost", 1.0),
+                "target_roles": metadata.get("target_roles", [])
+            }
+            citations.append(citation)
+        
+        if not citations:
+            return QueryResponse(
+                answer="I couldn't find any relevant information for your role-specific query. Try broadening your search or asking about a different topic.",
+                citations=[],
+                confidence=0.0
+            )
+        
+        # Generate role-aware LLM response
+        context_docs = []
+        for chunk in selected_chunks:
+            context_docs.append({
+                "metadata": chunk.get("metadata", {}),
+                "score": chunk.get("score", 0.0),
+                "content": chunk.get("content", "")
+            })
+        
+        llm_result = await llm_client.generate_answer(
+            question=request.question,
+            context_documents=context_docs,
+            user_id=request.user_id,
+            user_roles=request.roles
+        )
+        
+        # Track metrics
+        vita_query_confidence.observe(llm_result["confidence"])
+        
+        return QueryResponse(
+            answer=llm_result["answer"],
+            citations=citations,
+            confidence=llm_result["confidence"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to process role-specific query: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process role-specific query: {str(e)}")
+
+@app.get("/v7/stats/enhanced")
+async def get_enhanced_stats(_: bool = Depends(verify_api_key)):
+    """Get enhanced v7.1 statistics including relevance and viewpoint metrics."""
+    try:
+        # Get basic stats
+        basic_stats = await get_stats()
+        
+        # Get relevance metrics
+        with vita_db.get_session() as session:
+            total_channels = session.query(vita_db.ChannelMetrics).count()
+            
+            # Get relevance feedback stats
+            feedback_stats = vita_db.get_relevance_feedback_stats(30)
+            
+            # Get viewpoint counts
+            viewpoint_counts = {}
+            viewpoints = session.query(vita_db.ContentViewpoint).all()
+            for vp in viewpoints:
+                vp_type = vp.viewpoint_type
+                viewpoint_counts[vp_type] = viewpoint_counts.get(vp_type, 0) + 1
+        
+        # Enhance with v7.1 metrics
+        enhanced_stats = basic_stats.copy()
+        enhanced_stats.update({
+            "v7_1_features": {
+                "channels_with_metrics": total_channels,
+                "relevance_feedback": feedback_stats,
+                "viewpoint_distribution": viewpoint_counts,
+                "total_viewpoints": sum(viewpoint_counts.values())
+            }
+        })
+        
+        return enhanced_stats
+        
+    except Exception as e:
+        logger.error(f"Failed to get enhanced stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get enhanced stats: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

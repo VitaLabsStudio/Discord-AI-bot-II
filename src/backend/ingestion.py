@@ -15,6 +15,9 @@ from .ontology import ontology_manager
 from .llm_client import llm_client
 from .retry_utils import retry_on_api_error
 from .logger import get_logger
+# v7.1: Import new relevance and viewpoint systems
+from .relevance_analyzer import relevance_engine
+from .viewpoint_processor import viewpoint_processor
 
 logger = get_logger(__name__)
 
@@ -156,6 +159,75 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
         log_details.append(f"Combined content length: {len(combined_content)} characters")
         logger.info(f"Message {req.message_id}: Combined and cleaned content length: {len(combined_content)}")
         
+        # v7.1: Relevance Analysis and Filtering
+        try:
+            # Create message data for relevance analysis
+            message_data = {
+                'content': combined_content,
+                'attachments': [att.get('filename', '') for att in req.attachments] if req.attachments else [],
+                'message_id': req.message_id,
+                'channel_id': req.channel_id,
+                'user_id': req.user_id,
+                'timestamp': req.timestamp
+            }
+            
+            # Calculate initial relevance score
+            relevance_score = await relevance_engine.calculate_relevance_score(message_data, req.channel_id)
+            log_details.append(f"Relevance score: {relevance_score:.3f}")
+            
+            # Get dynamic threshold for this channel
+            channel_threshold = vita_db.get_channel_threshold(req.channel_id)
+            log_details.append(f"Channel threshold: {channel_threshold:.3f}")
+            
+            # Apply relevance filtering
+            if relevance_score < channel_threshold:
+                log_details.append(f"FILTERED: Relevance score {relevance_score:.3f} below threshold {channel_threshold:.3f}")
+                logger.info(f"Message {req.message_id}: Filtered out due to low relevance (score: {relevance_score:.3f}, threshold: {channel_threshold:.3f})")
+                
+                # Update channel metrics
+                vita_db.update_channel_metrics(req.channel_id, was_relevant=False)
+                
+                if batch_id:
+                    progress_tracker.add_log(
+                        batch_id, req.message_id, "FILTERED", 
+                        log_details, channel_name, f"Low relevance: {relevance_score:.3f} < {channel_threshold:.3f}"
+                    )
+                
+                # Mark as processed but don't ingest
+                mark_processed(req.message_id, req.channel_id, req.user_id)
+                return
+            
+            # Perform detailed classification with cascade
+            context_data = {
+                'channel_name': channel_name or req.channel_id,
+                'user_roles': req.roles or []
+            }
+            
+            classification_result = await relevance_engine.classify_with_cascade(
+                combined_content, relevance_score, context_data
+            )
+            
+            relevance_category = classification_result.get('category', 'MEDIUM')
+            confidence = classification_result.get('confidence', 0.5)
+            reasoning = classification_result.get('reasoning', 'No reasoning provided')
+            
+            log_details.append(f"Classification: {relevance_category} (confidence: {confidence:.3f})")
+            log_details.append(f"Reasoning: {reasoning}")
+            
+            # Update channel metrics with successful relevance
+            vita_db.update_channel_metrics(req.channel_id, was_relevant=True)
+            
+            # Record classification for learning
+            await relevance_engine.update_learning_metrics(req.message_id, relevance_category)
+            
+        except Exception as e:
+            logger.warning(f"Relevance analysis failed for message {req.message_id}: {e}")
+            log_details.append(f"Relevance analysis failed: {str(e)}")
+            # Default to MEDIUM category if analysis fails
+            relevance_category = 'MEDIUM'
+            confidence = 0.5
+            reasoning = "Relevance analysis failed"
+        
         # v6.1: Compute content hash for duplicate detection
         content_hash = compute_content_hash(combined_content, attachment_ids)
         log_details.append(f"Computed content hash: {content_hash[:8]}...")
@@ -179,9 +251,36 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             
             return
         
+        # v7.1: Process critical content through viewpoint matrix
+        viewpoint_chunks = []
+        if relevance_category in ['CRITICAL', 'HIGH']:
+            try:
+                log_details.append(f"Processing {relevance_category} content through viewpoint matrix")
+                
+                viewpoint_metadata = {
+                    'message_id': req.message_id,
+                    'channel_id': req.channel_id,
+                    'user_id': req.user_id,
+                    'timestamp': req.timestamp.isoformat() if isinstance(req.timestamp, datetime) else str(req.timestamp),
+                    'relevance_category': relevance_category,
+                    'confidence': confidence,
+                    'filename': req.attachments[0].get('filename') if req.attachments else None
+                }
+                
+                viewpoint_chunks = await viewpoint_processor.process_critical_content(
+                    combined_content, viewpoint_metadata
+                )
+                
+                log_details.append(f"Generated {len(viewpoint_chunks)} viewpoint chunks")
+                logger.info(f"Message {req.message_id}: Generated {len(viewpoint_chunks)} viewpoint chunks")
+                
+            except Exception as e:
+                logger.warning(f"Viewpoint processing failed for message {req.message_id}: {e}")
+                log_details.append(f"Viewpoint processing failed: {str(e)}")
+        
         # Split content into chunks
-        chunks = split_text_for_embedding(combined_content)
-        if not chunks:
+        base_chunks = split_text_for_embedding(combined_content)
+        if not base_chunks and not viewpoint_chunks:
             log_details.append("No chunks generated after splitting")
             logger.info(f"No chunks generated for message {req.message_id}")
             
@@ -194,12 +293,31 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             mark_processed(req.message_id, req.channel_id, req.user_id)
             return
         
-        log_details.append(f"Split into {len(chunks)} chunks for embedding")
-        logger.info(f"Message {req.message_id}: Split into {len(chunks)} chunks for embedding.")
+        # Combine base chunks with viewpoint chunks
+        all_chunks = []
+        
+        # Add base chunks
+        for chunk in base_chunks:
+            all_chunks.append({
+                'content': chunk,
+                'metadata': {
+                    'chunk_type': 'original',
+                    'viewpoint': None,
+                    'retrieval_weight': 1.0
+                }
+            })
+        
+        # Add viewpoint chunks
+        for vp_chunk in viewpoint_chunks:
+            all_chunks.append(vp_chunk)
+        
+        log_details.append(f"Split into {len(base_chunks)} base chunks + {len(viewpoint_chunks)} viewpoint chunks = {len(all_chunks)} total")
+        logger.info(f"Message {req.message_id}: Split into {len(all_chunks)} total chunks for embedding.")
         
         # Generate embeddings
         try:
-            embeddings = await embedding_manager.embed_chunks(chunks)
+            chunk_contents = [chunk['content'] for chunk in all_chunks]
+            embeddings = await embedding_manager.embed_chunks(chunk_contents)
             if not embeddings:
                 error_msg = "Failed to generate embeddings"
                 log_details.append(f"ERROR: {error_msg}")
@@ -228,19 +346,38 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
         
         # Create metadata for each chunk
         metadatas = []
-        for i, chunk in enumerate(chunks):
+        for i, chunk_data in enumerate(all_chunks):
+            chunk_content = chunk_data['content']
+            chunk_metadata = chunk_data.get('metadata', {})
+            
             metadata = {
                 "message_id": req.message_id,
                 "channel_id": req.channel_id,
                 "user_id": req.user_id,
-                "content": chunk,
+                "content": chunk_content,
                 "timestamp": req.timestamp.isoformat() if isinstance(req.timestamp, datetime) else str(req.timestamp),
                 "chunk_index": i,
-                "total_chunks": len(chunks),
+                "total_chunks": len(all_chunks),
                 # v6.1: Add content hash and attachment IDs for traceability
                 "content_hash": content_hash,
-                "attachment_ids": attachment_ids if attachment_ids else []
+                "attachment_ids": attachment_ids if attachment_ids else [],
+                # v7.1: Add relevance and viewpoint metadata
+                "relevance_category": relevance_category,
+                "relevance_confidence": confidence,
+                "relevance_reasoning": reasoning,
+                "viewpoint": chunk_metadata.get('viewpoint'),
+                "retrieval_weight": chunk_metadata.get('retrieval_weight', 1.0),
+                "content_type": chunk_metadata.get('content_type', 'original_content'),
+                "chunk_type": chunk_metadata.get('chunk_type', 'original')
             }
+            
+            # Add viewpoint-specific metadata
+            if chunk_metadata.get('target_roles'):
+                metadata["target_roles"] = chunk_metadata['target_roles']
+            if chunk_metadata.get('qa_index') is not None:
+                metadata["qa_index"] = chunk_metadata['qa_index']
+                metadata["question"] = chunk_metadata.get('question', '')
+                metadata["answer"] = chunk_metadata.get('answer', '')
             
             # Add optional fields
             if req.thread_id:
@@ -249,6 +386,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             if req.attachments:
                 metadata["has_attachments"] = True
                 metadata["attachment_count"] = len(req.attachments)
+                metadata["filename"] = req.attachments[0].get('filename') if req.attachments else None
             
             # Add permission metadata
             if req.roles:
@@ -256,15 +394,15 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
             
             metadatas.append(metadata)
             # Debug log for metadata creation (limit content preview)
-            logger.debug(f"Message {req.message_id}, Chunk {i}: Metadata created, content preview: '{chunk[:80]}...'")
+            logger.debug(f"Message {req.message_id}, Chunk {i}: Metadata created, content preview: '{chunk_content[:80]}...'")
         
         log_details.append(f"Created metadata for {len(metadatas)} chunks")
         
         # Store embeddings in Pinecone
         try:
             embedding_manager.store_embeddings(embeddings, metadatas)
-            log_details.append(f"Stored {len(chunks)} vectors in Pinecone")
-            logger.info(f"Message {req.message_id}: Sent {len(chunks)} vectors to Pinecone for storage.")
+            log_details.append(f"Stored {len(all_chunks)} vectors in Pinecone ({len(base_chunks)} base + {len(viewpoint_chunks)} viewpoint)")
+            logger.info(f"Message {req.message_id}: Sent {len(all_chunks)} vectors to Pinecone for storage.")
         except Exception as e:
             error_msg = f"Error storing embeddings: {e}"
             log_details.append(f"ERROR: {error_msg}")

@@ -152,6 +152,49 @@ class Attachment(Base):
     def __repr__(self):
         return f"<Attachment(attachment_id='{self.attachment_id}', filename='{self.original_filename}')>"
 
+# v7.1: New tables for adaptive relevance and viewpoint processing
+class ChannelMetrics(Base):
+    """Table for tracking channel-specific relevance metrics."""
+    __tablename__ = "channel_metrics"
+    
+    channel_id = Column(String, primary_key=True, index=True)
+    total_messages_processed = Column(Integer, default=0, nullable=False)
+    irrelevant_messages_count = Column(Integer, default=0, nullable=False)
+    dynamic_relevance_threshold = Column(Float, default=0.3, nullable=False)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f"<ChannelMetrics(channel_id='{self.channel_id}', threshold={self.dynamic_relevance_threshold})>"
+
+class ContentViewpoint(Base):
+    """Table for storing multi-viewpoint analysis of critical content."""
+    __tablename__ = "content_viewpoints"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    original_message_id = Column(String, nullable=False, index=True)
+    viewpoint_type = Column(String, nullable=False, index=True)  # executive, technical, actionable, qa_synthetic
+    content = Column(Text, nullable=False)
+    retrieval_weight = Column(Float, default=1.0, nullable=False)
+    target_roles = Column(Text, nullable=True)  # JSON array of target roles
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f"<ContentViewpoint(id={self.id}, viewpoint='{self.viewpoint_type}', message='{self.original_message_id}')>"
+
+class RelevanceFeedback(Base):
+    """Table for tracking relevance classification feedback for learning."""
+    __tablename__ = "relevance_feedback"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    message_id = Column(String, nullable=False, index=True)
+    user_id = Column(String, nullable=False, index=True)
+    predicted_category = Column(String, nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW, IRRELEVANT
+    actual_usefulness = Column(Integer, nullable=True)  # 1=helpful, 0=not helpful, null=no feedback
+    feedback_timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    def __repr__(self):
+        return f"<RelevanceFeedback(id={self.id}, predicted='{self.predicted_category}', actual={self.actual_usefulness})>"
+
 class VitaDatabase:
     """Database manager for VITA Discord AI bot."""
     
@@ -1089,10 +1132,10 @@ class VitaDatabase:
         Get attachment information by ID.
         
         Args:
-            attachment_id: SHA-256 hash of file content
+            attachment_id: Attachment ID (SHA-256 hash)
             
         Returns:
-            Dictionary with attachment info or None
+            Dictionary with attachment info or None if not found
         """
         with self.get_session() as session:
             try:
@@ -1100,21 +1143,193 @@ class VitaDatabase:
                     Attachment.attachment_id == attachment_id
                 ).first()
                 
-                if not attachment:
-                    return None
-                
-                return {
-                    "attachment_id": attachment.attachment_id,
-                    "original_filename": attachment.original_filename,
-                    "file_size_bytes": attachment.file_size_bytes,
-                    "mime_type": attachment.mime_type,
-                    "first_seen_at": attachment.first_seen_at.isoformat(),
-                    "download_url": attachment.download_url
-                }
+                if attachment:
+                    return {
+                        "attachment_id": attachment.attachment_id,
+                        "original_filename": attachment.original_filename,
+                        "file_size_bytes": attachment.file_size_bytes,
+                        "mime_type": attachment.mime_type,
+                        "first_seen_at": attachment.first_seen_at.isoformat(),
+                        "download_url": attachment.download_url
+                    }
+                return None
                 
             except Exception as e:
                 logger.error(f"Failed to get attachment info for {attachment_id}: {e}")
                 return None
+
+    # v7.1: Channel Metrics Methods
+    
+    def get_channel_threshold(self, channel_id: str) -> float:
+        """Get dynamic relevance threshold for a channel."""
+        with self.get_session() as session:
+            try:
+                metrics = session.query(ChannelMetrics).filter(
+                    ChannelMetrics.channel_id == channel_id
+                ).first()
+                
+                if metrics:
+                    return metrics.dynamic_relevance_threshold
+                else:
+                    # Create default metrics for new channel
+                    default_threshold = 0.3
+                    new_metrics = ChannelMetrics(
+                        channel_id=channel_id,
+                        dynamic_relevance_threshold=default_threshold
+                    )
+                    session.add(new_metrics)
+                    session.commit()
+                    return default_threshold
+                    
+            except Exception as e:
+                logger.error(f"Failed to get channel threshold for {channel_id}: {e}")
+                return 0.3  # Default fallback
+    
+    def update_channel_metrics(self, channel_id: str, was_relevant: bool) -> bool:
+        """Update channel metrics with new message processing result."""
+        with self.get_session() as session:
+            try:
+                metrics = session.query(ChannelMetrics).filter(
+                    ChannelMetrics.channel_id == channel_id
+                ).first()
+                
+                if not metrics:
+                    metrics = ChannelMetrics(channel_id=channel_id)
+                    session.add(metrics)
+                
+                metrics.total_messages_processed += 1
+                if not was_relevant:
+                    metrics.irrelevant_messages_count += 1
+                
+                # Auto-adjust threshold if we have enough data
+                if metrics.total_messages_processed >= 100:
+                    irrelevant_rate = metrics.irrelevant_messages_count / metrics.total_messages_processed
+                    
+                    # Adjust threshold based on irrelevant rate
+                    if irrelevant_rate > 0.7:  # Too much noise, raise threshold
+                        metrics.dynamic_relevance_threshold = min(0.8, metrics.dynamic_relevance_threshold + 0.05)
+                    elif irrelevant_rate < 0.3:  # Too restrictive, lower threshold
+                        metrics.dynamic_relevance_threshold = max(0.1, metrics.dynamic_relevance_threshold - 0.05)
+                
+                session.commit()
+                return True
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to update channel metrics for {channel_id}: {e}")
+                return False
+    
+    def store_content_viewpoint(self, message_id: str, viewpoint_type: str, 
+                               content: str, retrieval_weight: float = 1.0, 
+                               target_roles: list = None) -> int:
+        """Store a viewpoint analysis of content."""
+        with self.get_session() as session:
+            try:
+                import json
+                viewpoint = ContentViewpoint(
+                    original_message_id=message_id,
+                    viewpoint_type=viewpoint_type,
+                    content=content,
+                    retrieval_weight=retrieval_weight,
+                    target_roles=json.dumps(target_roles) if target_roles else None
+                )
+                session.add(viewpoint)
+                session.commit()
+                session.refresh(viewpoint)
+                
+                logger.debug(f"Stored {viewpoint_type} viewpoint for message {message_id}")
+                return viewpoint.id
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to store content viewpoint: {e}")
+                raise
+    
+    def get_viewpoints_for_message(self, message_id: str) -> list:
+        """Get all viewpoints for a specific message."""
+        with self.get_session() as session:
+            try:
+                viewpoints = session.query(ContentViewpoint).filter(
+                    ContentViewpoint.original_message_id == message_id
+                ).all()
+                
+                result = []
+                for vp in viewpoints:
+                    import json
+                    result.append({
+                        "id": vp.id,
+                        "viewpoint_type": vp.viewpoint_type,
+                        "content": vp.content,
+                        "retrieval_weight": vp.retrieval_weight,
+                        "target_roles": json.loads(vp.target_roles) if vp.target_roles else [],
+                        "created_at": vp.created_at.isoformat()
+                    })
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"Failed to get viewpoints for message {message_id}: {e}")
+                return []
+    
+    def record_relevance_feedback(self, message_id: str, user_id: str, 
+                                 predicted_category: str, actual_usefulness: int = None) -> int:
+        """Record feedback on relevance classification accuracy."""
+        with self.get_session() as session:
+            try:
+                feedback = RelevanceFeedback(
+                    message_id=message_id,
+                    user_id=user_id,
+                    predicted_category=predicted_category,
+                    actual_usefulness=actual_usefulness
+                )
+                session.add(feedback)
+                session.commit()
+                session.refresh(feedback)
+                
+                logger.debug(f"Recorded relevance feedback for message {message_id}")
+                return feedback.id
+                
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to record relevance feedback: {e}")
+                raise
+    
+    def get_relevance_feedback_stats(self, days: int = 30) -> dict:
+        """Get relevance classification accuracy statistics."""
+        with self.get_session() as session:
+            try:
+                cutoff_date = datetime.utcnow() - timedelta(days=days)
+                
+                # Get feedback with actual usefulness ratings
+                feedback_with_ratings = session.query(RelevanceFeedback).filter(
+                    RelevanceFeedback.feedback_timestamp >= cutoff_date,
+                    RelevanceFeedback.actual_usefulness.isnot(None)
+                ).all()
+                
+                if not feedback_with_ratings:
+                    return {"total_feedback": 0, "accuracy_by_category": {}}
+                
+                # Calculate accuracy by predicted category
+                accuracy_stats = {}
+                for category in ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'IRRELEVANT']:
+                    category_feedback = [f for f in feedback_with_ratings if f.predicted_category == category]
+                    if category_feedback:
+                        correct_predictions = sum(1 for f in category_feedback if f.actual_usefulness == 1)
+                        accuracy = correct_predictions / len(category_feedback)
+                        accuracy_stats[category] = {
+                            "total": len(category_feedback),
+                            "correct": correct_predictions,
+                            "accuracy": round(accuracy, 3)
+                        }
+                
+                return {
+                    "total_feedback": len(feedback_with_ratings),
+                    "accuracy_by_category": accuracy_stats
+                }
+                
+            except Exception as e:
+                logger.error(f"Failed to get relevance feedback stats: {e}")
+                return {"total_feedback": 0, "accuracy_by_category": {}}
 
 # Global database instance
 vita_db = VitaDatabase()
