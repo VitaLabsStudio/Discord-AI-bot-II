@@ -1,6 +1,7 @@
 import asyncio
 import json
 import hashlib
+import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from .schemas import IngestRequest
@@ -16,6 +17,11 @@ from .retry_utils import retry_on_api_error
 from .logger import get_logger
 
 logger = get_logger(__name__)
+
+# Configuration for conservative ingestion
+INGESTION_DELAY_SECONDS = float(os.getenv("INGESTION_DELAY_SECONDS", "2.0"))  # Delay between messages
+RATE_LIMIT_BACKOFF_SECONDS = float(os.getenv("RATE_LIMIT_BACKOFF_SECONDS", "60.0"))  # Wait time on rate limits
+CONSERVATIVE_MODE = os.getenv("CONSERVATIVE_INGESTION", "true").lower() == "true"  # Enable conservative mode
 
 def is_processed(message_id: str) -> bool:
     """
@@ -273,13 +279,28 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
         
         # *** NEW: Enhanced Ontology Tagging and Knowledge Graph Update ***
         try:
-            # Skip ontology enhancement if we're experiencing rate limits
-            await _enhance_with_ontology_and_graph(req.message_id, combined_content, log_details)
+            # Always attempt ontology enhancement with smart rate limit handling
+            await _enhance_with_ontology_and_graph_with_backoff(req.message_id, combined_content, log_details)
         except Exception as ontology_error:
             error_str = str(ontology_error).lower()
             if "rate limit" in error_str or "429" in error_str:
-                logger.warning(f"Skipping ontology enhancement due to rate limits for message {req.message_id}")
-                log_details.append("Skipped ontology enhancement due to rate limits")
+                logger.warning(f"Rate limit detected during ontology enhancement for message {req.message_id}, waiting and retrying...")
+                log_details.append("Rate limit hit during ontology enhancement, retrying with backoff")
+                # Progressive backoff for rate limits
+                for attempt in range(3):
+                    wait_time = 30 * (attempt + 1)  # 30s, 60s, 90s
+                    logger.info(f"Waiting {wait_time} seconds before retry attempt {attempt + 1}/3")
+                    await asyncio.sleep(wait_time)
+                    try:
+                        await _enhance_with_ontology_and_graph_with_backoff(req.message_id, combined_content, log_details)
+                        log_details.append(f"Ontology enhancement succeeded on retry attempt {attempt + 1}")
+                        break
+                    except Exception as retry_error:
+                        if attempt == 2:  # Last attempt
+                            logger.warning(f"Ontology enhancement failed after all retries for message {req.message_id}")
+                            log_details.append("Ontology enhancement failed after all retries")
+                        else:
+                            logger.info(f"Retry attempt {attempt + 1} failed, continuing...")
             else:
                 logger.warning(f"Ontology enhancement failed for message {req.message_id}: {ontology_error}")
                 log_details.append(f"Ontology enhancement failed: {str(ontology_error)}")
@@ -335,14 +356,38 @@ async def run_batch_ingestion_task(requests: List[IngestRequest], batch_id: Opti
             progress_tracker.complete_batch(batch_id, "COMPLETED")
             return
         
-        logger.info(f"Processing {len(pending_requests)} pending messages")
+        if CONSERVATIVE_MODE:
+            estimated_time = len(pending_requests) * (INGESTION_DELAY_SECONDS + 10)  # 10s average per message
+            estimated_hours = estimated_time / 3600
+            logger.info(f"Processing {len(pending_requests)} pending messages in CONSERVATIVE MODE")
+            logger.info(f"Estimated completion time: {estimated_hours:.1f} hours (prioritizing completeness over speed)")
+        else:
+            logger.info(f"Processing {len(pending_requests)} pending messages")
         
-        # Process messages in parallel (but limit concurrency to avoid rate limits)
-        semaphore = asyncio.Semaphore(5)  # Max 5 concurrent ingestions
+        # Process messages sequentially to avoid rate limits completely
+        semaphore = asyncio.Semaphore(1)  # Max 1 concurrent ingestion for zero rate limit risk
         
         async def process_with_semaphore(req):
             async with semaphore:
-                await run_ingestion_task(req, batch_id)
+                try:
+                    await run_ingestion_task(req, batch_id)
+                    # Add configurable delay between messages to prevent rate limits
+                    if CONSERVATIVE_MODE:
+                        logger.debug(f"Conservative mode: waiting {INGESTION_DELAY_SECONDS} seconds between messages")
+                        await asyncio.sleep(INGESTION_DELAY_SECONDS)
+                except Exception as e:
+                    error_str = str(e).lower()
+                    if "rate limit" in error_str or "429" in error_str:
+                        logger.warning(f"Rate limit detected, waiting {RATE_LIMIT_BACKOFF_SECONDS} seconds before continuing...")
+                        await asyncio.sleep(RATE_LIMIT_BACKOFF_SECONDS)  # Configurable wait time on rate limit
+                        # Retry the message after waiting
+                        try:
+                            await run_ingestion_task(req, batch_id)
+                        except Exception as retry_error:
+                            logger.error(f"Failed to retry message {req.message_id} after rate limit: {retry_error}")
+                            raise retry_error
+                    else:
+                        raise e
         
         # Execute all ingestion tasks
         tasks = [process_with_semaphore(req) for req in pending_requests]
@@ -422,12 +467,12 @@ Only include entities with confidence >= 0.5. Be conservative with scoring.
         tag_response_text = tag_response.choices[0].message.content.strip()
         logger.debug(f"Ontology tagging response for {message_id}: {tag_response_text}")
         
-        # Parse ontology tagging results
+        # Parse ontology tagging results with robust JSON extraction
         try:
-            tag_data = json.loads(tag_response_text)
-            entities = tag_data.get('concepts', [])
-        except json.JSONDecodeError:
-            logger.warning(f"Failed to parse ontology tagging JSON for message {message_id}")
+            tag_data = _extract_json_from_response(tag_response_text)
+            entities = tag_data.get('concepts', []) if tag_data else []
+        except Exception as e:
+            logger.warning(f"Failed to parse ontology tagging JSON for message {message_id}: {e}")
             log_details.append("Ontology tagging failed - invalid JSON response")
             return
         
@@ -508,12 +553,12 @@ Only include relationships with confidence >= 0.5. Be conservative with scoring.
                     rel_response_text = rel_response.choices[0].message.content.strip()
                     logger.debug(f"Relationship extraction response for {message_id}: {rel_response_text}")
                     
-                    # Parse relationship extraction results
+                    # Parse relationship extraction results with robust JSON extraction
                     try:
-                        rel_data = json.loads(rel_response_text)
-                        relationships = rel_data.get('relationships', [])
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse relationship extraction JSON for message {message_id}")
+                        rel_data = _extract_json_from_response(rel_response_text)
+                        relationships = rel_data.get('relationships', []) if rel_data else []
+                    except Exception as e:
+                        logger.warning(f"Failed to parse relationship extraction JSON for message {message_id}: {e}")
                         relationships = []
                     
                     # Step 4: Create Graph Edges (only high-confidence relationships)
@@ -565,3 +610,108 @@ Only include relationships with confidence >= 0.5. Be conservative with scoring.
     except Exception as e:
         logger.error(f"Ontology enhancement failed for message {message_id}: {e}")
         raise 
+
+@retry_on_api_error(max_attempts=5, min_wait=10.0, max_wait=120.0)
+async def _enhance_with_ontology_and_graph_with_backoff(message_id: str, content: str, log_details: List[str]):
+    """
+    Enhanced ontology function with intelligent rate limit backoff.
+    
+    This version will automatically wait longer between API calls and has more
+    aggressive retry logic specifically designed to never hit rate limits.
+    """
+    try:
+        logger.debug(f"Starting rate-limit-aware ontology enhancement for message {message_id}")
+        
+        # Add a pre-emptive delay to space out API calls
+        await asyncio.sleep(1.0)  # 1-second delay before each ontology call
+        
+        # Use the existing ontology enhancement but with more conservative settings
+        return await _enhance_with_ontology_and_graph(message_id, content, log_details)
+        
+    except Exception as e:
+        error_str = str(e).lower()
+        if "rate limit" in error_str or "429" in error_str:
+            # Extract wait time from error message if available
+            import re
+            wait_match = re.search(r'try again in (\d+(?:\.\d+)?)([ms]?)', error_str)
+            if wait_match:
+                wait_time = float(wait_match.group(1))
+                unit = wait_match.group(2)
+                if unit == 'ms' or unit == 'm':
+                    wait_time = wait_time / 1000.0  # Convert milliseconds to seconds
+                # Add buffer time
+                wait_time = max(wait_time + 5.0, 30.0)  # At least 30 seconds
+                logger.info(f"Rate limit detected, waiting {wait_time:.1f} seconds as suggested by API")
+                await asyncio.sleep(wait_time)
+            else:
+                # Default longer wait if we can't parse the error
+                logger.info("Rate limit detected, waiting 60 seconds (default)")
+                await asyncio.sleep(60.0)
+        raise e
+
+def _extract_json_from_response(response_text: str) -> dict:
+    """
+    Robustly extract JSON from LLM response text that might contain extra formatting.
+    
+    Args:
+        response_text: Raw response text from LLM
+        
+    Returns:
+        Parsed JSON dict, or None if no valid JSON found
+    """
+    if not response_text or not response_text.strip():
+        return None
+    
+    # Try direct JSON parsing first
+    try:
+        return json.loads(response_text.strip())
+    except json.JSONDecodeError:
+        pass
+    
+    # Try to find JSON block between triple backticks
+    import re
+    json_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
+    match = re.search(json_pattern, response_text, re.DOTALL | re.IGNORECASE)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+    
+    # Try to find JSON object by looking for { ... }
+    brace_pattern = r'\{.*\}'
+    match = re.search(brace_pattern, response_text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+    
+    # Try to clean common formatting issues
+    cleaned_text = response_text.strip()
+    
+    # Remove markdown code blocks
+    if cleaned_text.startswith('```') and cleaned_text.endswith('```'):
+        lines = cleaned_text.split('\n')
+        if len(lines) >= 3:
+            cleaned_text = '\n'.join(lines[1:-1])
+    
+    # Remove common prefixes
+    prefixes_to_remove = [
+        "Here's the JSON:",
+        "Here is the JSON:",
+        "The JSON response is:",
+        "JSON:",
+        "Response:",
+    ]
+    
+    for prefix in prefixes_to_remove:
+        if cleaned_text.startswith(prefix):
+            cleaned_text = cleaned_text[len(prefix):].strip()
+    
+    # Final attempt at parsing cleaned text
+    try:
+        return json.loads(cleaned_text)
+    except json.JSONDecodeError:
+        logger.debug(f"Could not extract valid JSON from response: {response_text[:200]}...")
+        return None

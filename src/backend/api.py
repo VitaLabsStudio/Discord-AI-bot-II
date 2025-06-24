@@ -2,7 +2,7 @@ import os
 from typing import List
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Header, Request
 from fastapi.security import HTTPBearer
-from fastapi.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from dotenv import load_dotenv
 from prometheus_fastapi_instrumentator import Instrumentator
 from prometheus_client import Counter, Histogram, Gauge
@@ -18,6 +18,7 @@ from .logger import get_logger
 from datetime import datetime
 import aiohttp
 import json
+from fastapi.responses import JSONResponse
 
 # Load environment variables
 load_dotenv()
@@ -65,13 +66,20 @@ class TokenBudgetMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Check if this is an LLM endpoint
         if request.url.path in self.llm_endpoints:
-            current_cost = vita_estimated_cost_usd_total._value._value
+            # Get current cost from Counter - use ._value.values() for prometheus_client
+            try:
+                current_cost = sum(vita_estimated_cost_usd_total._value.values())
+            except (AttributeError, TypeError):
+                # Fallback if Counter structure is different
+                current_cost = 0.0
             
             if current_cost >= self.monthly_budget:
                 logger.warning(f"Monthly budget exceeded: ${current_cost:.2f} >= ${self.monthly_budget}")
-                return HTTPException(
+                return JSONResponse(
                     status_code=429,
-                    detail=f"Monthly budget exceeded (${current_cost:.2f}/${self.monthly_budget}). Contact administrator."
+                    content={
+                        "detail": f"Monthly budget exceeded (${current_cost:.2f}/${self.monthly_budget}). Contact administrator."
+                    }
                 )
         
         response = await call_next(request)

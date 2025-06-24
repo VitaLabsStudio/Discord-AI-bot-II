@@ -777,8 +777,12 @@ async def ingest_history_command(interaction: discord.Interaction, limit: int = 
         
         try:
             await status_message.edit(embed=final_embed)
-        except:
-            await interaction.followup.send(embed=final_embed)
+        except (discord.errors.NotFound, discord.errors.HTTPException) as e:
+            if "Invalid Webhook Token" in str(e) or "webhook" in str(e).lower():
+                logger.warning("Webhook token expired during final update, sending new message")
+                await interaction.followup.send(embed=final_embed)
+            else:
+                await interaction.followup.send(embed=final_embed)
         
     except Exception as e:
         logger.error(f"Failed to process ingest_history command: {e}")
@@ -852,8 +856,19 @@ async def monitor_batch_progress(bot, batch_id: str, status_message, embed,
                 
                 embed.set_field_at(3, name="🔄 Recent Activity", value=f"```yaml\n{recent_activity[:180]}```", inline=False)
             
-            # Update the message
-            await status_message.edit(embed=embed)
+            # Update the message with error handling for expired tokens
+            try:
+                await status_message.edit(embed=embed)
+            except discord.errors.NotFound:
+                # Webhook token expired, stop monitoring
+                logger.warning(f"Webhook token expired for batch {batch_id}, stopping progress updates")
+                break
+            except discord.errors.HTTPException as e:
+                if "Invalid Webhook Token" in str(e):
+                    logger.warning(f"Invalid webhook token for batch {batch_id}, stopping progress updates")
+                    break
+                else:
+                    raise
             
             # Check if completed
             if status in ["COMPLETED", "FAILED"]:

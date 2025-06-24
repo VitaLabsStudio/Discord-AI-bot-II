@@ -22,9 +22,13 @@ logger = get_logger(__name__)
 def _ensure_unstructured_available():
     """Ensure unstructured dependencies are properly loaded in child processes."""
     try:
-        # Import base unstructured first
         import unstructured
-        logger.info(f"unstructured version: {unstructured.__version__}")
+        # Only log version if it exists
+        version = getattr(unstructured, "__version__", None)
+        if version:
+            logger.info(f"unstructured version: {version}")
+        else:
+            logger.info("unstructured version attribute not found")
         
         # Test core partition function
         from unstructured.partition.auto import partition
@@ -48,8 +52,8 @@ def _ensure_unstructured_available():
             
         return True
         
-    except ImportError as e:
-        logger.error(f"Failed to import core unstructured dependencies: {e}")
+    except ImportError:
+        logger.warning("unstructured package not available")
         return False
 
 # Test dependency availability at module load

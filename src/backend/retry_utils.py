@@ -19,8 +19,8 @@ OPENAI_RETRYABLE_EXCEPTIONS = (
 
 def retry_on_api_error(
     max_attempts: int = 5,
-    min_wait: float = 1.0,
-    max_wait: float = 60.0,
+    min_wait: float = 10.0,  # Increased from 1.0 to 10.0 for more conservative approach
+    max_wait: float = 180.0,  # Increased from 60.0 to 180.0 for longer waits
     exponential_base: int = 2
 ):
     """
