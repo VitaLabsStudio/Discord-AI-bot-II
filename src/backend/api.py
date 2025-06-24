@@ -1,5 +1,4 @@
 import os
-from typing import List
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Header, Request
 from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware

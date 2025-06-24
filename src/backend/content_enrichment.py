@@ -1,10 +1,9 @@
 import re
 import asyncio
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from datetime import datetime
 import spacy
-from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
+from transformers import pipeline
 import openai
 from .logger import get_logger
 from .utils import clean_text

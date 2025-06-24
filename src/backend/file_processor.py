@@ -1,5 +1,4 @@
 import os
-import sys
 import asyncio
 import aiohttp
 import magic
@@ -30,25 +29,22 @@ def _ensure_unstructured_available():
         else:
             logger.info("unstructured version attribute not found")
         
-        # Test core partition function
-        from unstructured.partition.auto import partition
-        logger.info("Auto partition function loaded")
+        # Test core partition function availability
+        import importlib.util
+        if importlib.util.find_spec("unstructured.partition.auto"):
+            logger.info("Auto partition function loaded")
         
-        # Try to import docx partition function specifically
-        try:
-            from unstructured.partition.docx import partition_docx
+        # Check docx partition function availability
+        if importlib.util.find_spec("unstructured.partition.docx"):
             logger.info("DocX partition function loaded")
-        except ImportError as docx_error:
-            logger.warning(f"DocX partition function not available: {docx_error}")
-            # This is not fatal - we can still process other formats
+        else:
+            logger.warning("DocX partition function not available")
         
-        # Try to import pdf partition function specifically
-        try:
-            from unstructured.partition.pdf import partition_pdf
+        # Check pdf partition function availability
+        if importlib.util.find_spec("unstructured.partition.pdf"):
             logger.info("PDF partition function loaded")
-        except ImportError as pdf_error:
-            logger.warning(f"PDF partition function not available: {pdf_error}")
-            # This is not fatal - we can still process other formats
+        else:
+            logger.warning("PDF partition function not available")
             
         return True
         
@@ -326,7 +322,7 @@ class FileProcessor:
             
             # Enhance image quality for better OCR results
             try:
-                from PIL import ImageEnhance, ImageFilter
+                from PIL import ImageEnhance
                 
                 # Enhance contrast and sharpness for better OCR
                 enhancer = ImageEnhance.Contrast(image)

@@ -1,7 +1,6 @@
 import os
-import sqlite3
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy import create_engine, Column, String, DateTime, Boolean, Text, Integer, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -638,6 +637,7 @@ class VitaDatabase:
                     EvidenceChain.was_successful == False,
                     EvidenceChain.timestamp >= cutoff_date
                 ).order_by(EvidenceChain.timestamp.desc()).all()
+                
                 
                 return failed_chains
                 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict
 from datetime import datetime
 
 class IngestRequest(BaseModel):

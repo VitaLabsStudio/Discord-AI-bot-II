@@ -1,10 +1,7 @@
 import os
-import json
 import yaml
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 from .database import vita_db
-from .llm_client import llm_client
 from .logger import get_logger
 
 logger = get_logger(__name__)

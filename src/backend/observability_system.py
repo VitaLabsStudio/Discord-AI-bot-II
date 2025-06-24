@@ -1,15 +1,9 @@
-import time
-import json
-import asyncio
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, asdict
-from collections import defaultdict, deque
-from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Dict, Any, Optional
+from dataclasses import dataclass
+from collections import deque
 import structlog
-from prometheus_client import Counter, Histogram, Gauge, CollectorRegistry, generate_latest
-from fastapi import FastAPI, Response
-from .logger import get_logger
+from prometheus_client import Counter, Histogram, CollectorRegistry, generate_latest
 
 # Configure structured logging
 structlog.configure(

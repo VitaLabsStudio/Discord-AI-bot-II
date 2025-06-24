@@ -3,7 +3,7 @@ import json
 import hashlib
 import os
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from .schemas import IngestRequest
 from .database import vita_db
 from .file_processor import process_attachments
@@ -295,7 +295,7 @@ async def run_ingestion_task(req: IngestRequest, batch_id: Optional[str] = None,
                         await _enhance_with_ontology_and_graph_with_backoff(req.message_id, combined_content, log_details)
                         log_details.append(f"Ontology enhancement succeeded on retry attempt {attempt + 1}")
                         break
-                    except Exception as retry_error:
+                    except Exception:
                         if attempt == 2:  # Last attempt
                             logger.warning(f"Ontology enhancement failed after all retries for message {req.message_id}")
                             log_details.append("Ontology enhancement failed after all retries")

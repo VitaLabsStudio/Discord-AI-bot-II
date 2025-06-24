@@ -1,14 +1,11 @@
 import json
-import asyncio
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 from sklearn.cluster import KMeans
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from .database import vita_db
 from .embedding import embedding_manager
 from .llm_client import llm_client
-from .ontology import ontology_manager
 from .logger import get_logger
 
 logger = get_logger(__name__)
@@ -529,7 +526,6 @@ Format your response as JSON:
             for playbook in playbook_stats:
                 total_usage = playbook['total_usage']
                 negative_feedback = playbook['negative_feedback']
-                positive_feedback = playbook['positive_feedback']
                 
                 if total_usage > 0:
                     negative_rate = negative_feedback / total_usage

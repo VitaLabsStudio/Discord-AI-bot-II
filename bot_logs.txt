@@ -28185,3 +28185,519 @@ INFO:     127.0.0.1:53188 - "POST /query HTTP/1.1" 200 OK
 [2025-06-24 19:04:57,997] [INFO] [src.backend.embedding] - Generated 1 embeddings
 [2025-06-24 19:04:58,132] [INFO] [src.backend.embedding] - Found 5 similar documents
 INFO:     127.0.0.1:53198 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:13:20,169] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:13:20,179] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:13:26,174] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: ```json
+{
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+    ...
+[2025-06-24 19:13:26,186] [ERROR] [src.backend.api] - Multi-hop query execution failed: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:13:26,187] [WARNING] [src.backend.api] - Evidence chain e3d0a932-26ab-4d08-84bf-cae56f0fd9f0 encountered error: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:13:26,188] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:13:26,518] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:13:27,053] [INFO] [src.backend.embedding] - Found 10 similar documents
+INFO:     127.0.0.1:53309 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:13:36,929] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:13:36,929] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:13:44,897] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: {
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+            ...
+[2025-06-24 19:13:44,902] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:13:45,234] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:13:45,364] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:13:45,365] [INFO] [src.backend.api] - Executing graph query tool for step 4
+[2025-06-24 19:13:45,375] [INFO] [src.backend.api] - Processing GraphQL-lite query
+[2025-06-24 19:13:45,380] [INFO] [src.backend.api] - GraphQL-lite query returned 0 results
+INFO:     127.0.0.1:53317 - "POST /graph-query HTTP/1.1" 200 OK
+[2025-06-24 19:13:45,384] [INFO] [src.backend.api] - Graph query returned 0 results
+[2025-06-24 19:13:45,396] [INFO] [src.backend.llm_client] - Generating answer for user test_user with 5 context documents and 3 conversation history
+[2025-06-24 19:13:49,208] [INFO] [src.backend.llm_client] - Generated answer with confidence 0.27
+[2025-06-24 19:13:49,215] [INFO] [src.backend.api] - Generated enhanced response with evidence chain 252429cd-9c41-4ae9-8087-8c3e6c137660
+INFO:     127.0.0.1:53314 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:14:12,532] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:14:12,533] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:14:16,920] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: {
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+            ...
+[2025-06-24 19:14:16,924] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:14:17,263] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:14:17,396] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:14:17,397] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:14:17,656] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:14:17,788] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:14:17,788] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:14:18,034] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:14:18,166] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:14:18,167] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:14:18,400] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:14:18,531] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:14:18,533] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:14:18,820] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:14:18,952] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:14:18,953] [INFO] [src.backend.llm_client] - Generating answer for user test_user with 25 context documents and 4 conversation history
+[2025-06-24 19:14:25,410] [INFO] [src.backend.llm_client] - Generated answer with confidence 0.33
+[2025-06-24 19:14:25,416] [INFO] [src.backend.api] - Generated enhanced response with evidence chain 644488f8-d855-46ea-998e-a58f21081bc4
+INFO:     127.0.0.1:53321 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:20:23,277] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:20:23,281] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:20:25,905] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: {
+    "complexity": "simple",
+    "steps": [
+        {
+            "step_number": 1,
+            "de...
+[2025-06-24 19:20:25,923] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:20:26,184] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:20:26,761] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:20:26,762] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:20:27,056] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:20:27,185] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:20:27,186] [INFO] [src.backend.llm_client] - Generating answer for user test_user with 10 context documents and 5 conversation history
+[2025-06-24 19:20:29,432] [INFO] [src.backend.llm_client] - Generated answer with confidence 0.20
+[2025-06-24 19:20:29,458] [INFO] [src.backend.api] - Generated enhanced response with evidence chain 08816eae-8e32-4c8f-8be5-49e980e5416f
+INFO:     127.0.0.1:53388 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:20:36,388] [INFO] [src.backend.api] - Processing query from user test_user
+[2025-06-24 19:20:36,389] [INFO] [src.backend.api] - Query routed to AI pipeline for user test_user
+[2025-06-24 19:20:45,185] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: {
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+            ...
+[2025-06-24 19:20:45,189] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:20:45,468] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:20:45,606] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:20:45,606] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:20:45,823] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:20:45,956] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:20:45,957] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:20:46,271] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:20:46,401] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:20:46,402] [INFO] [src.backend.api] - Executing graph query tool for step 4
+[2025-06-24 19:20:46,412] [INFO] [src.backend.api] - Processing GraphQL-lite query
+[2025-06-24 19:20:46,416] [INFO] [src.backend.api] - GraphQL-lite query returned 0 results
+INFO:     127.0.0.1:53396 - "POST /graph-query HTTP/1.1" 200 OK
+[2025-06-24 19:20:46,418] [INFO] [src.backend.api] - Graph query returned 0 results
+[2025-06-24 19:20:46,420] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:20:46,619] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:20:46,755] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:20:46,756] [INFO] [src.backend.llm_client] - Generating answer for user test_user with 20 context documents and 5 conversation history
+[2025-06-24 19:20:54,362] [INFO] [src.backend.llm_client] - Generated answer with confidence 0.29
+[2025-06-24 19:20:54,367] [INFO] [src.backend.api] - Generated enhanced response with evidence chain 53ca5011-cddf-4a45-9026-0fcd27b78c8e
+INFO:     127.0.0.1:53393 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:21:20,166] [INFO] [src.bot.discord_bot] - --- Message Received ---
+[2025-06-24 19:21:20,167] [INFO] [src.bot.discord_bot] - Message ID: 1387120421899599963 from User: 291677996430131201
+[2025-06-24 19:21:20,168] [INFO] [src.bot.discord_bot] - Source: channel '#chat' (1370074863892431061)
+[2025-06-24 19:21:20,168] [INFO] [src.bot.discord_bot] - Content length: 4, Attachments: 0
+[2025-06-24 19:21:20,170] [INFO] [src.bot.discord_bot] - Sending message 1387120421899599963 to backend for ingestion.
+[2025-06-24 19:21:20,189] [INFO] [src.backend.api] - Received ingestion request for message 1387120421899599963
+[2025-06-24 19:21:20,203] [INFO] [src.backend.api] - Queued ingestion task for message 1387120421899599963
+INFO:     127.0.0.1:53400 - "POST /ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:21:20,206] [INFO] [src.backend.ingestion] - Starting ingestion for message 1387120421899599963
+[2025-06-24 19:21:20,213] [INFO] [src.backend.ingestion] - Message 1387120421899599963: Combined and cleaned content length: 4
+[2025-06-24 19:21:20,219] [INFO] [src.backend.ingestion] - Message 1387120421899599963: Split into 1 chunks for embedding.
+[2025-06-24 19:21:20,220] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:21:20,470] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:21:20,473] [INFO] [src.backend.ingestion] - Message 1387120421899599963: Generated 1 embedding vectors.
+[2025-06-24 19:21:20,475] [INFO] [src.backend.embedding] - Storing 1 embeddings in Pinecone
+[2025-06-24 19:21:20,696] [INFO] [src.backend.embedding] - Successfully stored 1 vectors
+[2025-06-24 19:21:20,696] [INFO] [src.backend.ingestion] - Message 1387120421899599963: Sent 1 vectors to Pinecone for storage.
+[2025-06-24 19:21:22,470] [INFO] [src.backend.ingestion] - Successfully completed ingestion for message 1387120421899599963
+[2025-06-24 19:22:51,715] [INFO] [src.backend.progress_tracker] - Created batch b77f4523-ddbf-46c2-918f-7168e609e75e for 708 messages
+[2025-06-24 19:22:51,717] [INFO] [src.backend.api] - Queued batch ingestion task for 708 messages with batch_id: b77f4523-ddbf-46c2-918f-7168e609e75e
+INFO:     127.0.0.1:53442 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:22:51,718] [INFO] [src.backend.ingestion] - Starting batch ingestion for 708 messages
+[2025-06-24 19:22:52,157] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:22:52,158] [INFO] [src.backend.progress_tracker] - Batch b77f4523-ddbf-46c2-918f-7168e609e75e completed with status: COMPLETED
+INFO:     127.0.0.1:53442 - "GET /progress/b77f4523-ddbf-46c2-918f-7168e609e75e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53442 - "GET /progress/b77f4523-ddbf-46c2-918f-7168e609e75e HTTP/1.1" 200 OK
+[2025-06-24 19:22:52,617] [INFO] [src.bot.discord_bot] - Processing threads in channel: #chat
+[2025-06-24 19:22:54,746] [INFO] [src.backend.progress_tracker] - Created batch b01ca170-3b7d-44a8-9869-d98c1c30bbb0 for 1 messages
+[2025-06-24 19:22:54,746] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: b01ca170-3b7d-44a8-9869-d98c1c30bbb0
+INFO:     127.0.0.1:53442 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:22:54,747] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-24 19:22:54,749] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:22:54,749] [INFO] [src.backend.progress_tracker] - Batch b01ca170-3b7d-44a8-9869-d98c1c30bbb0 completed with status: COMPLETED
+INFO:     127.0.0.1:53442 - "GET /progress/b01ca170-3b7d-44a8-9869-d98c1c30bbb0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53442 - "GET /progress/b01ca170-3b7d-44a8-9869-d98c1c30bbb0 HTTP/1.1" 200 OK
+[2025-06-24 19:22:55,203] [INFO] [src.bot.discord_bot] - Processing threads in channel: #announcements
+[2025-06-24 19:22:57,175] [INFO] [src.backend.progress_tracker] - Created batch 0c9c4aef-fda9-4b19-bf6b-c9c1e7d9b5e4 for 2 messages
+[2025-06-24 19:22:57,176] [INFO] [src.backend.api] - Queued batch ingestion task for 2 messages with batch_id: 0c9c4aef-fda9-4b19-bf6b-c9c1e7d9b5e4
+INFO:     127.0.0.1:53442 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:22:57,178] [INFO] [src.backend.ingestion] - Starting batch ingestion for 2 messages
+[2025-06-24 19:22:57,180] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:22:57,181] [INFO] [src.backend.progress_tracker] - Batch 0c9c4aef-fda9-4b19-bf6b-c9c1e7d9b5e4 completed with status: COMPLETED
+INFO:     127.0.0.1:53442 - "GET /progress/0c9c4aef-fda9-4b19-bf6b-c9c1e7d9b5e4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53442 - "GET /progress/0c9c4aef-fda9-4b19-bf6b-c9c1e7d9b5e4 HTTP/1.1" 200 OK
+[2025-06-24 19:22:57,433] [INFO] [src.bot.discord_bot] - Processing threads in channel: #strategy
+[2025-06-24 19:22:59,517] [INFO] [src.backend.progress_tracker] - Created batch 571d0c11-99e2-428d-a41e-613bd7a68ca4 for 23 messages
+[2025-06-24 19:22:59,518] [INFO] [src.backend.api] - Queued batch ingestion task for 23 messages with batch_id: 571d0c11-99e2-428d-a41e-613bd7a68ca4
+INFO:     127.0.0.1:53442 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:22:59,520] [INFO] [src.backend.ingestion] - Starting batch ingestion for 23 messages
+[2025-06-24 19:22:59,534] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:22:59,535] [INFO] [src.backend.progress_tracker] - Batch 571d0c11-99e2-428d-a41e-613bd7a68ca4 completed with status: COMPLETED
+INFO:     127.0.0.1:53442 - "GET /progress/571d0c11-99e2-428d-a41e-613bd7a68ca4 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53442 - "GET /progress/571d0c11-99e2-428d-a41e-613bd7a68ca4 HTTP/1.1" 200 OK
+[2025-06-24 19:22:59,936] [INFO] [src.bot.discord_bot] - Processing threads in channel: #fundraising
+[2025-06-24 19:23:01,523] [INFO] [src.bot.discord_bot] - Processing threads in channel: #legal-ops
+[2025-06-24 19:23:03,649] [INFO] [src.bot.discord_bot] - Processing threads in channel: #finance
+[2025-06-24 19:23:05,685] [INFO] [src.backend.progress_tracker] - Created batch 0791b872-9f72-46d7-b6ab-b4dcab671a74 for 50 messages
+[2025-06-24 19:23:05,685] [INFO] [src.backend.api] - Queued batch ingestion task for 50 messages with batch_id: 0791b872-9f72-46d7-b6ab-b4dcab671a74
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:05,687] [INFO] [src.backend.ingestion] - Starting batch ingestion for 50 messages
+[2025-06-24 19:23:05,750] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:05,750] [INFO] [src.backend.progress_tracker] - Batch 0791b872-9f72-46d7-b6ab-b4dcab671a74 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/0791b872-9f72-46d7-b6ab-b4dcab671a74 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/0791b872-9f72-46d7-b6ab-b4dcab671a74 HTTP/1.1" 200 OK
+[2025-06-24 19:23:06,094] [INFO] [src.bot.discord_bot] - Processing threads in channel: #astrology
+[2025-06-24 19:23:08,141] [INFO] [src.backend.progress_tracker] - Created batch fa66b621-f697-4067-8353-8482146cc1b1 for 51 messages
+[2025-06-24 19:23:08,141] [INFO] [src.backend.api] - Queued batch ingestion task for 51 messages with batch_id: fa66b621-f697-4067-8353-8482146cc1b1
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:08,143] [INFO] [src.backend.ingestion] - Starting batch ingestion for 51 messages
+[2025-06-24 19:23:08,186] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:08,187] [INFO] [src.backend.progress_tracker] - Batch fa66b621-f697-4067-8353-8482146cc1b1 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/fa66b621-f697-4067-8353-8482146cc1b1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/fa66b621-f697-4067-8353-8482146cc1b1 HTTP/1.1" 200 OK
+[2025-06-24 19:23:08,550] [INFO] [src.bot.discord_bot] - Processing threads in channel: #product-dev
+[2025-06-24 19:23:10,597] [INFO] [src.backend.progress_tracker] - Created batch 005c366e-bd4a-4242-bdb9-8bbd32866a81 for 4 messages
+[2025-06-24 19:23:10,598] [INFO] [src.backend.api] - Queued batch ingestion task for 4 messages with batch_id: 005c366e-bd4a-4242-bdb9-8bbd32866a81
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:10,599] [INFO] [src.backend.ingestion] - Starting batch ingestion for 4 messages
+[2025-06-24 19:23:10,605] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:10,605] [INFO] [src.backend.progress_tracker] - Batch 005c366e-bd4a-4242-bdb9-8bbd32866a81 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/005c366e-bd4a-4242-bdb9-8bbd32866a81 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/005c366e-bd4a-4242-bdb9-8bbd32866a81 HTTP/1.1" 200 OK
+[2025-06-24 19:23:11,009] [INFO] [src.bot.discord_bot] - Processing threads in channel: #product-labeling
+[2025-06-24 19:23:12,599] [INFO] [src.bot.discord_bot] - Processing threads in channel: #clinical-data
+[2025-06-24 19:23:14,280] [INFO] [src.bot.discord_bot] - Processing threads in channel: #poduct-line-expansion
+[2025-06-24 19:23:15,602] [INFO] [src.backend.api] - Processing query from user 359492438831661058
+[2025-06-24 19:23:15,603] [INFO] [src.backend.api] - Query routed to AI pipeline for user 359492438831661058
+[2025-06-24 19:23:16,029] [INFO] [src.backend.progress_tracker] - Created batch 3c82204f-fcc6-4400-9406-b4f418c7adc2 for 1 messages
+[2025-06-24 19:23:16,030] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 3c82204f-fcc6-4400-9406-b4f418c7adc2
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:16,032] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-24 19:23:16,036] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:16,037] [INFO] [src.backend.progress_tracker] - Batch 3c82204f-fcc6-4400-9406-b4f418c7adc2 completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/3c82204f-fcc6-4400-9406-b4f418c7adc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/3c82204f-fcc6-4400-9406-b4f418c7adc2 HTTP/1.1" 200 OK
+[2025-06-24 19:23:16,358] [INFO] [src.bot.discord_bot] - Processing threads in channel: #manufacturing
+[2025-06-24 19:23:18,417] [INFO] [src.backend.progress_tracker] - Created batch 95289243-dc52-4279-8654-fc1bc3ad2592 for 22 messages
+[2025-06-24 19:23:18,418] [INFO] [src.backend.api] - Queued batch ingestion task for 22 messages with batch_id: 95289243-dc52-4279-8654-fc1bc3ad2592
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:18,419] [INFO] [src.backend.ingestion] - Starting batch ingestion for 22 messages
+[2025-06-24 19:23:18,444] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:18,444] [INFO] [src.backend.progress_tracker] - Batch 95289243-dc52-4279-8654-fc1bc3ad2592 completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/95289243-dc52-4279-8654-fc1bc3ad2592 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/95289243-dc52-4279-8654-fc1bc3ad2592 HTTP/1.1" 200 OK
+[2025-06-24 19:23:18,724] [INFO] [src.bot.discord_bot] - Processing threads in channel: #roadmap
+[2025-06-24 19:23:20,813] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: {
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+            ...
+[2025-06-24 19:23:20,818] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:23:20,884] [INFO] [src.backend.progress_tracker] - Created batch b6aa9e36-9845-45f2-9a3c-a9f257c3e645 for 7 messages
+[2025-06-24 19:23:20,885] [INFO] [src.backend.api] - Queued batch ingestion task for 7 messages with batch_id: b6aa9e36-9845-45f2-9a3c-a9f257c3e645
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:20,886] [INFO] [src.backend.ingestion] - Starting batch ingestion for 7 messages
+[2025-06-24 19:23:20,894] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:20,894] [INFO] [src.backend.progress_tracker] - Batch b6aa9e36-9845-45f2-9a3c-a9f257c3e645 completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/b6aa9e36-9845-45f2-9a3c-a9f257c3e645 HTTP/1.1" 200 OK
+[2025-06-24 19:23:21,085] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:23:21,651] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:23:21,652] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+INFO:     127.0.0.1:53448 - "GET /progress/b6aa9e36-9845-45f2-9a3c-a9f257c3e645 HTTP/1.1" 200 OK
+[2025-06-24 19:23:21,660] [INFO] [src.bot.discord_bot] - Processing threads in channel: #design
+[2025-06-24 19:23:21,861] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:23:21,994] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:23:21,996] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:23:22,222] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:23:22,351] [INFO] [src.backend.embedding] - Found 5 similar documents
+[2025-06-24 19:23:22,352] [INFO] [src.backend.api] - Executing graph query tool for step 4
+[2025-06-24 19:23:22,355] [INFO] [src.backend.api] - Processing GraphQL-lite query
+[2025-06-24 19:23:22,358] [INFO] [src.backend.api] - GraphQL-lite query returned 0 results
+INFO:     127.0.0.1:53451 - "POST /graph-query HTTP/1.1" 200 OK
+[2025-06-24 19:23:22,365] [INFO] [src.backend.api] - Graph query returned 0 results
+[2025-06-24 19:23:22,368] [INFO] [src.backend.llm_client] - Generating answer for user 359492438831661058 with 15 context documents and 1 conversation history
+[2025-06-24 19:23:23,092] [INFO] [src.backend.progress_tracker] - Created batch 17b9c2a4-e930-4bd4-9e72-03f07309c0aa for 78 messages
+[2025-06-24 19:23:23,093] [INFO] [src.backend.api] - Queued batch ingestion task for 78 messages with batch_id: 17b9c2a4-e930-4bd4-9e72-03f07309c0aa
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:23,094] [INFO] [src.backend.ingestion] - Starting batch ingestion for 78 messages
+[2025-06-24 19:23:23,158] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:23,159] [INFO] [src.backend.progress_tracker] - Batch 17b9c2a4-e930-4bd4-9e72-03f07309c0aa completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/17b9c2a4-e930-4bd4-9e72-03f07309c0aa HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/17b9c2a4-e930-4bd4-9e72-03f07309c0aa HTTP/1.1" 200 OK
+[2025-06-24 19:23:24,495] [INFO] [src.backend.progress_tracker] - Created batch 0048a89c-339d-4685-9244-514344d46783 for 17 messages
+[2025-06-24 19:23:24,496] [INFO] [src.backend.api] - Queued batch ingestion task for 17 messages with batch_id: 0048a89c-339d-4685-9244-514344d46783
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:24,499] [INFO] [src.backend.ingestion] - Starting batch ingestion for 17 messages
+[2025-06-24 19:23:24,520] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:24,520] [INFO] [src.backend.progress_tracker] - Batch 0048a89c-339d-4685-9244-514344d46783 completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/0048a89c-339d-4685-9244-514344d46783 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/0048a89c-339d-4685-9244-514344d46783 HTTP/1.1" 200 OK
+[2025-06-24 19:23:26,179] [INFO] [src.backend.progress_tracker] - Created batch 3df84e68-5bf7-4201-bfb5-ba21d08624ea for 31 messages
+[2025-06-24 19:23:26,179] [INFO] [src.backend.api] - Queued batch ingestion task for 31 messages with batch_id: 3df84e68-5bf7-4201-bfb5-ba21d08624ea
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:26,181] [INFO] [src.backend.ingestion] - Starting batch ingestion for 31 messages
+[2025-06-24 19:23:26,201] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:26,201] [INFO] [src.backend.progress_tracker] - Batch 3df84e68-5bf7-4201-bfb5-ba21d08624ea completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/3df84e68-5bf7-4201-bfb5-ba21d08624ea HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/3df84e68-5bf7-4201-bfb5-ba21d08624ea HTTP/1.1" 200 OK
+[2025-06-24 19:23:27,631] [INFO] [src.backend.progress_tracker] - Created batch 3712ba0d-de6f-48d8-9742-d4efd98f5211 for 2 messages
+[2025-06-24 19:23:27,632] [INFO] [src.backend.api] - Queued batch ingestion task for 2 messages with batch_id: 3712ba0d-de6f-48d8-9742-d4efd98f5211
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:27,635] [INFO] [src.backend.ingestion] - Starting batch ingestion for 2 messages
+[2025-06-24 19:23:27,637] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:27,638] [INFO] [src.backend.progress_tracker] - Batch 3712ba0d-de6f-48d8-9742-d4efd98f5211 completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/3712ba0d-de6f-48d8-9742-d4efd98f5211 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/3712ba0d-de6f-48d8-9742-d4efd98f5211 HTTP/1.1" 200 OK
+[2025-06-24 19:23:29,150] [INFO] [src.backend.progress_tracker] - Created batch 9f65a953-6cd7-4789-a1ec-142a0c48988e for 13 messages
+[2025-06-24 19:23:29,151] [INFO] [src.backend.api] - Queued batch ingestion task for 13 messages with batch_id: 9f65a953-6cd7-4789-a1ec-142a0c48988e
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:29,152] [INFO] [src.backend.ingestion] - Starting batch ingestion for 13 messages
+[2025-06-24 19:23:29,168] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:29,169] [INFO] [src.backend.progress_tracker] - Batch 9f65a953-6cd7-4789-a1ec-142a0c48988e completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/9f65a953-6cd7-4789-a1ec-142a0c48988e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/9f65a953-6cd7-4789-a1ec-142a0c48988e HTTP/1.1" 200 OK
+[2025-06-24 19:23:31,592] [INFO] [src.backend.progress_tracker] - Created batch 806e656a-80ea-47a7-ad67-dcf35857b8df for 7 messages
+[2025-06-24 19:23:31,593] [INFO] [src.backend.api] - Queued batch ingestion task for 7 messages with batch_id: 806e656a-80ea-47a7-ad67-dcf35857b8df
+INFO:     127.0.0.1:53448 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:31,595] [INFO] [src.backend.ingestion] - Starting batch ingestion for 7 messages
+[2025-06-24 19:23:31,602] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:31,602] [INFO] [src.backend.progress_tracker] - Batch 806e656a-80ea-47a7-ad67-dcf35857b8df completed with status: COMPLETED
+INFO:     127.0.0.1:53448 - "GET /progress/806e656a-80ea-47a7-ad67-dcf35857b8df HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /progress/806e656a-80ea-47a7-ad67-dcf35857b8df HTTP/1.1" 200 OK
+[2025-06-24 19:23:31,870] [INFO] [src.bot.discord_bot] - Processing threads in channel: #brand-voice
+[2025-06-24 19:23:33,096] [INFO] [src.backend.llm_client] - Generated answer with confidence 0.37
+[2025-06-24 19:23:33,100] [INFO] [src.backend.api] - Generated enhanced response with evidence chain 49a0596e-a3d2-4a63-963f-913fd1c6d881
+INFO:     127.0.0.1:53445 - "POST /query HTTP/1.1" 200 OK
+[2025-06-24 19:23:33,847] [INFO] [src.backend.progress_tracker] - Created batch 48f5936f-6712-40df-9238-0732c7a71e00 for 24 messages
+[2025-06-24 19:23:33,848] [INFO] [src.backend.api] - Queued batch ingestion task for 24 messages with batch_id: 48f5936f-6712-40df-9238-0732c7a71e00
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:33,850] [INFO] [src.backend.ingestion] - Starting batch ingestion for 24 messages
+[2025-06-24 19:23:33,866] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:33,866] [INFO] [src.backend.progress_tracker] - Batch 48f5936f-6712-40df-9238-0732c7a71e00 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/48f5936f-6712-40df-9238-0732c7a71e00 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/48f5936f-6712-40df-9238-0732c7a71e00 HTTP/1.1" 200 OK
+[2025-06-24 19:23:34,097] [INFO] [src.bot.discord_bot] - Processing threads in channel: #social-launch
+[2025-06-24 19:23:36,361] [INFO] [src.backend.progress_tracker] - Created batch a2e2a8be-297c-4255-a98c-696ba6e2c7ca for 3 messages
+[2025-06-24 19:23:36,361] [INFO] [src.backend.api] - Queued batch ingestion task for 3 messages with batch_id: a2e2a8be-297c-4255-a98c-696ba6e2c7ca
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:36,363] [INFO] [src.backend.ingestion] - Starting batch ingestion for 3 messages
+[2025-06-24 19:23:36,366] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:36,366] [INFO] [src.backend.progress_tracker] - Batch a2e2a8be-297c-4255-a98c-696ba6e2c7ca completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/a2e2a8be-297c-4255-a98c-696ba6e2c7ca HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/a2e2a8be-297c-4255-a98c-696ba6e2c7ca HTTP/1.1" 200 OK
+[2025-06-24 19:23:36,723] [INFO] [src.bot.discord_bot] - Processing threads in channel: #site-dev
+[2025-06-24 19:23:37,876] [INFO] [src.backend.progress_tracker] - Created batch 0a6de11c-7e37-4381-a907-7f2db2a43245 for 20 messages
+[2025-06-24 19:23:37,877] [INFO] [src.backend.api] - Queued batch ingestion task for 20 messages with batch_id: 0a6de11c-7e37-4381-a907-7f2db2a43245
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:37,878] [INFO] [src.backend.ingestion] - Starting batch ingestion for 20 messages
+[2025-06-24 19:23:37,890] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:37,891] [INFO] [src.backend.progress_tracker] - Batch 0a6de11c-7e37-4381-a907-7f2db2a43245 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/0a6de11c-7e37-4381-a907-7f2db2a43245 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/0a6de11c-7e37-4381-a907-7f2db2a43245 HTTP/1.1" 200 OK
+[2025-06-24 19:23:39,984] [INFO] [src.backend.progress_tracker] - Created batch b7ce57a8-3135-4211-9892-f70fd43f477f for 6 messages
+[2025-06-24 19:23:39,985] [INFO] [src.backend.api] - Queued batch ingestion task for 6 messages with batch_id: b7ce57a8-3135-4211-9892-f70fd43f477f
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:39,986] [INFO] [src.backend.ingestion] - Starting batch ingestion for 6 messages
+[2025-06-24 19:23:39,999] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:40,000] [INFO] [src.backend.progress_tracker] - Batch b7ce57a8-3135-4211-9892-f70fd43f477f completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/b7ce57a8-3135-4211-9892-f70fd43f477f HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/b7ce57a8-3135-4211-9892-f70fd43f477f HTTP/1.1" 200 OK
+[2025-06-24 19:23:40,238] [INFO] [src.bot.discord_bot] - Processing threads in channel: #footprint
+[2025-06-24 19:23:42,149] [INFO] [src.backend.progress_tracker] - Created batch 87a28a32-465e-4d3a-8004-e343a8295621 for 41 messages
+[2025-06-24 19:23:42,150] [INFO] [src.backend.api] - Queued batch ingestion task for 41 messages with batch_id: 87a28a32-465e-4d3a-8004-e343a8295621
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:42,152] [INFO] [src.backend.ingestion] - Starting batch ingestion for 41 messages
+[2025-06-24 19:23:42,179] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:42,179] [INFO] [src.backend.progress_tracker] - Batch 87a28a32-465e-4d3a-8004-e343a8295621 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/87a28a32-465e-4d3a-8004-e343a8295621 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/87a28a32-465e-4d3a-8004-e343a8295621 HTTP/1.1" 200 OK
+[2025-06-24 19:23:42,547] [INFO] [src.bot.discord_bot] - Processing threads in channel: #ai-content-workflow
+[2025-06-24 19:23:43,889] [INFO] [src.backend.progress_tracker] - Created batch 04339392-94a3-4365-b37a-70dc04c2df86 for 15 messages
+[2025-06-24 19:23:43,889] [INFO] [src.backend.api] - Queued batch ingestion task for 15 messages with batch_id: 04339392-94a3-4365-b37a-70dc04c2df86
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:43,891] [INFO] [src.backend.ingestion] - Starting batch ingestion for 15 messages
+[2025-06-24 19:23:43,915] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:43,915] [INFO] [src.backend.progress_tracker] - Batch 04339392-94a3-4365-b37a-70dc04c2df86 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/04339392-94a3-4365-b37a-70dc04c2df86 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/04339392-94a3-4365-b37a-70dc04c2df86 HTTP/1.1" 200 OK
+[2025-06-24 19:23:45,782] [INFO] [src.backend.progress_tracker] - Created batch f9d6a8f5-2994-4656-bf2d-e542072c6780 for 26 messages
+[2025-06-24 19:23:45,783] [INFO] [src.backend.api] - Queued batch ingestion task for 26 messages with batch_id: f9d6a8f5-2994-4656-bf2d-e542072c6780
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:45,785] [INFO] [src.backend.ingestion] - Starting batch ingestion for 26 messages
+[2025-06-24 19:23:45,805] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:45,806] [INFO] [src.backend.progress_tracker] - Batch f9d6a8f5-2994-4656-bf2d-e542072c6780 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/f9d6a8f5-2994-4656-bf2d-e542072c6780 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/f9d6a8f5-2994-4656-bf2d-e542072c6780 HTTP/1.1" 200 OK
+[2025-06-24 19:23:46,133] [INFO] [src.bot.discord_bot] - Processing threads in channel: #image-creatives
+[2025-06-24 19:23:48,183] [INFO] [src.backend.progress_tracker] - Created batch 15804ad8-c336-4efb-b88f-24946c0fa1ba for 3 messages
+[2025-06-24 19:23:48,184] [INFO] [src.backend.api] - Queued batch ingestion task for 3 messages with batch_id: 15804ad8-c336-4efb-b88f-24946c0fa1ba
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:48,186] [INFO] [src.backend.ingestion] - Starting batch ingestion for 3 messages
+[2025-06-24 19:23:48,188] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:48,189] [INFO] [src.backend.progress_tracker] - Batch 15804ad8-c336-4efb-b88f-24946c0fa1ba completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/15804ad8-c336-4efb-b88f-24946c0fa1ba HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/15804ad8-c336-4efb-b88f-24946c0fa1ba HTTP/1.1" 200 OK
+[2025-06-24 19:23:48,486] [INFO] [src.bot.discord_bot] - Processing threads in channel: #video-creatives
+[2025-06-24 19:23:50,956] [INFO] [src.backend.progress_tracker] - Created batch 5116f832-e47e-4b12-ad8c-c835769bab76 for 4 messages
+[2025-06-24 19:23:50,957] [INFO] [src.backend.api] - Queued batch ingestion task for 4 messages with batch_id: 5116f832-e47e-4b12-ad8c-c835769bab76
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:50,959] [INFO] [src.backend.ingestion] - Starting batch ingestion for 4 messages
+[2025-06-24 19:23:50,962] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:50,963] [INFO] [src.backend.progress_tracker] - Batch 5116f832-e47e-4b12-ad8c-c835769bab76 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/5116f832-e47e-4b12-ad8c-c835769bab76 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/5116f832-e47e-4b12-ad8c-c835769bab76 HTTP/1.1" 200 OK
+[2025-06-24 19:23:51,293] [INFO] [src.bot.discord_bot] - Processing threads in channel: #creative-copy
+[2025-06-24 19:23:53,063] [INFO] [src.bot.discord_bot] - Processing threads in channel: #influencer-marketing
+[2025-06-24 19:23:55,012] [INFO] [src.backend.progress_tracker] - Created batch 4840e803-cd5a-495d-99ce-0ae6c323835e for 7 messages
+[2025-06-24 19:23:55,013] [INFO] [src.backend.api] - Queued batch ingestion task for 7 messages with batch_id: 4840e803-cd5a-495d-99ce-0ae6c323835e
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:55,017] [INFO] [src.backend.ingestion] - Starting batch ingestion for 7 messages
+[2025-06-24 19:23:55,027] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:55,028] [INFO] [src.backend.progress_tracker] - Batch 4840e803-cd5a-495d-99ce-0ae6c323835e completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/4840e803-cd5a-495d-99ce-0ae6c323835e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/4840e803-cd5a-495d-99ce-0ae6c323835e HTTP/1.1" 200 OK
+[2025-06-24 19:23:55,287] [INFO] [src.bot.discord_bot] - Processing threads in channel: #demographics-targeting
+[2025-06-24 19:23:57,284] [INFO] [src.backend.progress_tracker] - Created batch 112425a2-cd3a-4710-8ab6-82d717cccb57 for 5 messages
+[2025-06-24 19:23:57,285] [INFO] [src.backend.api] - Queued batch ingestion task for 5 messages with batch_id: 112425a2-cd3a-4710-8ab6-82d717cccb57
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:57,286] [INFO] [src.backend.ingestion] - Starting batch ingestion for 5 messages
+[2025-06-24 19:23:57,290] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:57,290] [INFO] [src.backend.progress_tracker] - Batch 112425a2-cd3a-4710-8ab6-82d717cccb57 completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/112425a2-cd3a-4710-8ab6-82d717cccb57 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/112425a2-cd3a-4710-8ab6-82d717cccb57 HTTP/1.1" 200 OK
+[2025-06-24 19:23:57,829] [INFO] [src.bot.discord_bot] - Processing threads in channel: #landing-pages
+[2025-06-24 19:23:59,703] [INFO] [src.backend.progress_tracker] - Created batch c3ac1d3a-1a0b-4dcd-ba3b-32569687f0cb for 7 messages
+[2025-06-24 19:23:59,704] [INFO] [src.backend.api] - Queued batch ingestion task for 7 messages with batch_id: c3ac1d3a-1a0b-4dcd-ba3b-32569687f0cb
+INFO:     127.0.0.1:53445 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:23:59,705] [INFO] [src.backend.ingestion] - Starting batch ingestion for 7 messages
+[2025-06-24 19:23:59,710] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:23:59,711] [INFO] [src.backend.progress_tracker] - Batch c3ac1d3a-1a0b-4dcd-ba3b-32569687f0cb completed with status: COMPLETED
+INFO:     127.0.0.1:53445 - "GET /progress/c3ac1d3a-1a0b-4dcd-ba3b-32569687f0cb HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53445 - "GET /progress/c3ac1d3a-1a0b-4dcd-ba3b-32569687f0cb HTTP/1.1" 200 OK
+[2025-06-24 19:24:00,206] [INFO] [src.bot.discord_bot] - Processing threads in channel: #seo
+[2025-06-24 19:24:01,956] [INFO] [src.bot.discord_bot] - Processing threads in channel: #email-marketing
+[2025-06-24 19:24:03,494] [INFO] [src.bot.discord_bot] - Processing threads in channel: #google-ads
+[2025-06-24 19:24:05,909] [INFO] [src.backend.progress_tracker] - Created batch d41ef3d7-492e-4589-b5ea-e0b0e96b7fc2 for 2 messages
+[2025-06-24 19:24:05,910] [INFO] [src.backend.api] - Queued batch ingestion task for 2 messages with batch_id: d41ef3d7-492e-4589-b5ea-e0b0e96b7fc2
+INFO:     127.0.0.1:53455 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:05,911] [INFO] [src.backend.ingestion] - Starting batch ingestion for 2 messages
+[2025-06-24 19:24:05,913] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:05,914] [INFO] [src.backend.progress_tracker] - Batch d41ef3d7-492e-4589-b5ea-e0b0e96b7fc2 completed with status: COMPLETED
+INFO:     127.0.0.1:53455 - "GET /progress/d41ef3d7-492e-4589-b5ea-e0b0e96b7fc2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53455 - "GET /progress/d41ef3d7-492e-4589-b5ea-e0b0e96b7fc2 HTTP/1.1" 200 OK
+[2025-06-24 19:24:06,327] [INFO] [src.bot.discord_bot] - Processing threads in channel: #marketing-resources
+[2025-06-24 19:24:08,472] [INFO] [src.backend.progress_tracker] - Created batch df45edec-7b02-4ff2-9a0a-e7982dc7865b for 1 messages
+[2025-06-24 19:24:08,473] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: df45edec-7b02-4ff2-9a0a-e7982dc7865b
+INFO:     127.0.0.1:53455 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:08,481] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-24 19:24:08,484] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:08,484] [INFO] [src.backend.progress_tracker] - Batch df45edec-7b02-4ff2-9a0a-e7982dc7865b completed with status: COMPLETED
+INFO:     127.0.0.1:53455 - "GET /progress/df45edec-7b02-4ff2-9a0a-e7982dc7865b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53455 - "GET /progress/df45edec-7b02-4ff2-9a0a-e7982dc7865b HTTP/1.1" 200 OK
+[2025-06-24 19:24:08,963] [INFO] [src.bot.discord_bot] - Processing threads in channel: #admin-legal
+[2025-06-24 19:24:11,024] [INFO] [src.backend.progress_tracker] - Created batch 3b649af1-ce64-4bc1-9ff0-60364d220789 for 1 messages
+[2025-06-24 19:24:11,025] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 3b649af1-ce64-4bc1-9ff0-60364d220789
+INFO:     127.0.0.1:53455 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:11,026] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-24 19:24:11,028] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:11,028] [INFO] [src.backend.progress_tracker] - Batch 3b649af1-ce64-4bc1-9ff0-60364d220789 completed with status: COMPLETED
+INFO:     127.0.0.1:53455 - "GET /progress/3b649af1-ce64-4bc1-9ff0-60364d220789 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53455 - "GET /progress/3b649af1-ce64-4bc1-9ff0-60364d220789 HTTP/1.1" 200 OK
+[2025-06-24 19:24:11,310] [INFO] [src.bot.discord_bot] - Processing threads in channel: #finance
+[2025-06-24 19:24:13,427] [INFO] [src.backend.progress_tracker] - Created batch 9b0951da-5854-4719-bb2e-c59cd1f036ec for 5 messages
+[2025-06-24 19:24:13,427] [INFO] [src.backend.api] - Queued batch ingestion task for 5 messages with batch_id: 9b0951da-5854-4719-bb2e-c59cd1f036ec
+INFO:     127.0.0.1:53455 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:13,429] [INFO] [src.backend.ingestion] - Starting batch ingestion for 5 messages
+[2025-06-24 19:24:13,433] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:13,434] [INFO] [src.backend.progress_tracker] - Batch 9b0951da-5854-4719-bb2e-c59cd1f036ec completed with status: COMPLETED
+INFO:     127.0.0.1:53455 - "GET /progress/9b0951da-5854-4719-bb2e-c59cd1f036ec HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53455 - "GET /progress/9b0951da-5854-4719-bb2e-c59cd1f036ec HTTP/1.1" 200 OK
+[2025-06-24 19:24:13,731] [INFO] [src.bot.discord_bot] - Processing threads in channel: #supply-logistics
+[2025-06-24 19:24:15,828] [INFO] [src.backend.progress_tracker] - Created batch 3905b2b6-a0e3-4cad-a487-7ec968aebb66 for 1 messages
+[2025-06-24 19:24:15,828] [INFO] [src.backend.api] - Queued batch ingestion task for 1 messages with batch_id: 3905b2b6-a0e3-4cad-a487-7ec968aebb66
+INFO:     127.0.0.1:53455 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:15,830] [INFO] [src.backend.ingestion] - Starting batch ingestion for 1 messages
+[2025-06-24 19:24:15,832] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:15,832] [INFO] [src.backend.progress_tracker] - Batch 3905b2b6-a0e3-4cad-a487-7ec968aebb66 completed with status: COMPLETED
+INFO:     127.0.0.1:53455 - "GET /progress/3905b2b6-a0e3-4cad-a487-7ec968aebb66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53455 - "GET /progress/3905b2b6-a0e3-4cad-a487-7ec968aebb66 HTTP/1.1" 200 OK
+[2025-06-24 19:24:16,126] [INFO] [src.bot.discord_bot] - Processing threads in channel: #wholesale
+[2025-06-24 19:24:18,089] [INFO] [src.backend.progress_tracker] - Created batch 0baa1f28-5556-4d42-a03e-45956a2f1b87 for 2 messages
+[2025-06-24 19:24:18,090] [INFO] [src.backend.api] - Queued batch ingestion task for 2 messages with batch_id: 0baa1f28-5556-4d42-a03e-45956a2f1b87
+INFO:     127.0.0.1:53455 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:18,091] [INFO] [src.backend.ingestion] - Starting batch ingestion for 2 messages
+[2025-06-24 19:24:18,094] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:18,095] [INFO] [src.backend.progress_tracker] - Batch 0baa1f28-5556-4d42-a03e-45956a2f1b87 completed with status: COMPLETED
+INFO:     127.0.0.1:53455 - "GET /progress/0baa1f28-5556-4d42-a03e-45956a2f1b87 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53455 - "GET /progress/0baa1f28-5556-4d42-a03e-45956a2f1b87 HTTP/1.1" 200 OK
+[2025-06-24 19:24:18,375] [INFO] [src.bot.discord_bot] - Processing threads in channel: #customer-support
+[2025-06-24 19:24:20,119] [INFO] [src.bot.discord_bot] - Processing threads in channel: #amazon
+[2025-06-24 19:24:21,728] [INFO] [src.bot.discord_bot] - Processing threads in channel: #intl-prop
+[2025-06-24 19:24:23,766] [INFO] [src.backend.progress_tracker] - Created batch 39d77bf9-196b-426f-81cf-ee90dfcb569a for 8 messages
+[2025-06-24 19:24:23,766] [INFO] [src.backend.api] - Queued batch ingestion task for 8 messages with batch_id: 39d77bf9-196b-426f-81cf-ee90dfcb569a
+INFO:     127.0.0.1:53456 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:23,768] [INFO] [src.backend.ingestion] - Starting batch ingestion for 8 messages
+[2025-06-24 19:24:23,775] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:23,776] [INFO] [src.backend.progress_tracker] - Batch 39d77bf9-196b-426f-81cf-ee90dfcb569a completed with status: COMPLETED
+INFO:     127.0.0.1:53456 - "GET /progress/39d77bf9-196b-426f-81cf-ee90dfcb569a HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53456 - "GET /progress/39d77bf9-196b-426f-81cf-ee90dfcb569a HTTP/1.1" 200 OK
+[2025-06-24 19:24:24,049] [INFO] [src.bot.discord_bot] - Processing threads in channel: #unit-economics
+[2025-06-24 19:24:25,966] [INFO] [src.backend.progress_tracker] - Created batch 1f41cd09-bad0-4467-9b89-9b20c8e4f9c2 for 2 messages
+[2025-06-24 19:24:25,966] [INFO] [src.backend.api] - Queued batch ingestion task for 2 messages with batch_id: 1f41cd09-bad0-4467-9b89-9b20c8e4f9c2
+INFO:     127.0.0.1:53456 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:25,968] [INFO] [src.backend.ingestion] - Starting batch ingestion for 2 messages
+[2025-06-24 19:24:25,970] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:25,970] [INFO] [src.backend.progress_tracker] - Batch 1f41cd09-bad0-4467-9b89-9b20c8e4f9c2 completed with status: COMPLETED
+INFO:     127.0.0.1:53456 - "GET /progress/1f41cd09-bad0-4467-9b89-9b20c8e4f9c2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53456 - "GET /progress/1f41cd09-bad0-4467-9b89-9b20c8e4f9c2 HTTP/1.1" 200 OK
+[2025-06-24 19:24:26,347] [INFO] [src.bot.discord_bot] - Processing threads in channel: #important-links-docs
+[2025-06-24 19:24:29,703] [INFO] [src.bot.discord_bot] - Processing threads in channel: #media-assets
+[2025-06-24 19:24:31,443] [INFO] [src.bot.discord_bot] - Processing threads in channel: #templates
+[2025-06-24 19:24:33,256] [INFO] [src.bot.discord_bot] - Processing threads in channel: #dev-log
+[2025-06-24 19:24:34,865] [INFO] [src.bot.discord_bot] - Processing threads in channel: #ai-dev
+[2025-06-24 19:24:37,180] [INFO] [src.backend.progress_tracker] - Created batch 9d4c55b6-fd84-447c-8ee3-7e1fc48215a3 for 43 messages
+[2025-06-24 19:24:37,181] [INFO] [src.backend.api] - Queued batch ingestion task for 43 messages with batch_id: 9d4c55b6-fd84-447c-8ee3-7e1fc48215a3
+INFO:     127.0.0.1:53459 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:37,182] [INFO] [src.backend.ingestion] - Starting batch ingestion for 43 messages
+[2025-06-24 19:24:37,211] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:37,211] [INFO] [src.backend.progress_tracker] - Batch 9d4c55b6-fd84-447c-8ee3-7e1fc48215a3 completed with status: COMPLETED
+INFO:     127.0.0.1:53459 - "GET /progress/9d4c55b6-fd84-447c-8ee3-7e1fc48215a3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53459 - "GET /progress/9d4c55b6-fd84-447c-8ee3-7e1fc48215a3 HTTP/1.1" 200 OK
+[2025-06-24 19:24:37,658] [INFO] [src.bot.discord_bot] - Processing threads in channel: #x-reply-bot
+[2025-06-24 19:24:40,468] [INFO] [src.backend.progress_tracker] - Created batch 28aae22c-cfd6-4603-8588-3aded161ba58 for 63 messages
+[2025-06-24 19:24:40,469] [INFO] [src.backend.api] - Queued batch ingestion task for 63 messages with batch_id: 28aae22c-cfd6-4603-8588-3aded161ba58
+INFO:     127.0.0.1:53459 - "POST /batch_ingest HTTP/1.1" 202 Accepted
+[2025-06-24 19:24:40,470] [INFO] [src.backend.ingestion] - Starting batch ingestion for 63 messages
+[2025-06-24 19:24:40,521] [INFO] [src.backend.ingestion] - All messages in batch already processed
+[2025-06-24 19:24:40,522] [INFO] [src.backend.progress_tracker] - Batch 28aae22c-cfd6-4603-8588-3aded161ba58 completed with status: COMPLETED
+INFO:     127.0.0.1:53459 - "GET /progress/28aae22c-cfd6-4603-8588-3aded161ba58 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53459 - "GET /progress/28aae22c-cfd6-4603-8588-3aded161ba58 HTTP/1.1" 200 OK
+[2025-06-24 19:24:40,747] [INFO] [src.bot.discord_bot] - Processing threads in channel: #discord-ai-bot-temp
+[2025-06-24 19:25:50,771] [INFO] [src.backend.api] - Processing query from user 244090046515380227
+[2025-06-24 19:25:50,772] [INFO] [src.backend.api] - Query routed to AI pipeline for user 244090046515380227
+[2025-06-24 19:25:58,451] [INFO] [src.backend.api] - Generated reasoning plan using cost-effective model: ```json
+{
+    "complexity": "multi_hop",
+    "steps": [
+        {
+            "step_number": 1,
+    ...
+[2025-06-24 19:25:58,456] [ERROR] [src.backend.api] - Multi-hop query execution failed: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:25:58,456] [WARNING] [src.backend.api] - Evidence chain eff87799-beea-4383-9c2d-54f9bc9cc55e encountered error: Expecting value: line 1 column 1 (char 0)
+[2025-06-24 19:25:58,457] [INFO] [src.backend.embedding] - Generating embeddings for 1 chunks
+[2025-06-24 19:25:58,719] [INFO] [src.backend.embedding] - Generated 1 embeddings
+[2025-06-24 19:25:59,292] [INFO] [src.backend.embedding] - Found 5 similar documents
+INFO:     127.0.0.1:53485 - "POST /query HTTP/1.1" 200 OK
